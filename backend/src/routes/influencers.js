@@ -43,6 +43,36 @@ router.post("/", authorize("Super Admin", "Manager"), (req, res) => {
   res.status(201).json({ data: row });
 });
 
+// Bulk import from CSV
+router.post("/bulk", authorize("Super Admin", "Manager"), (req, res) => {
+  const records = req.body;
+  if (!Array.isArray(records) || records.length === 0) {
+    return res.status(400).json({ error: "Expected a non-empty array of influencer records." });
+  }
+  const inserted = [];
+  const errors = [];
+  records.forEach((record, i) => {
+    try {
+      // Normalize numeric fields
+      const clean = {
+        ...record,
+        followers: Number(record.followers) || 0,
+        engagementRate: Number(record.engagementRate || record.engagement_rate) || 0,
+        commercialCost: Number(record.commercialCost || record.commercial_cost) || 0,
+        adRightsCost: Number(record.adRightsCost || record.ad_rights_cost) || 0,
+        reelCost: Number(record.reelCost || record.reel_cost) || 0,
+        storyCost: Number(record.storyCost || record.story_cost) || 0,
+        eventAppearanceCost: Number(record.eventAppearanceCost || record.event_appearance_cost) || 0,
+      };
+      const row = db.insert("influencers", clean);
+      inserted.push(row);
+    } catch (err) {
+      errors.push({ row: i + 1, error: err.message });
+    }
+  });
+  res.status(201).json({ inserted: inserted.length, errors });
+});
+
 router.put("/:id", authorize("Super Admin", "Manager"), (req, res) => {
   const row = db.update("influencers", req.params.id, req.body);
   if (!row) return res.status(404).json({ error: "Influencer not found." });

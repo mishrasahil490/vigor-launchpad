@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Plus, Download, Bookmark, Instagram, Youtube } from "lucide-react";
+import { Plus, Download, Bookmark, Instagram, Youtube, Upload } from "lucide-react";
 import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import PageHeader from "../components/PageHeader";
 import Modal from "../components/Modal";
 import Drawer from "../components/Drawer";
 import FormField from "../components/FormField";
+import CSVImportModal from "../components/CSVImportModal";
 
 const CATEGORIES = ["Beauty", "Fashion", "Fitness", "Tech", "Food", "Travel", "Comedy", "Lifestyle", "Gaming", "Finance"];
 const TIERS = ["Nano", "Micro", "Macro", "Mega"];
@@ -27,6 +28,7 @@ export default function Influencers() {
   const [influencers, setInfluencers] = useState([]);
   const [filters, setFilters] = useState({ category: "", tier: "", city: "", minFollowers: "", minEngagement: "", maxBudget: "" });
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [selected, setSelected] = useState(null);
 
@@ -34,7 +36,9 @@ export default function Influencers() {
 
   function load() {
     const params = Object.fromEntries(Object.entries(filters).filter(([, v]) => v !== ""));
-    api.get("/influencers", { params }).then((res) => setInfluencers(res.data.data));
+    api.get("/influencers", { params })
+      .then((res) => setInfluencers(res.data?.data || []))
+      .catch(() => setInfluencers([]));
   }
 
   useEffect(() => {
@@ -55,6 +59,8 @@ export default function Influencers() {
     setForm(EMPTY_FORM);
     load();
   }
+
+
 
   function exportCSV() {
     const headers = ["creatorName", "instagramHandle", "category", "tier", "followers", "engagementRate", "location", "commercialCost"];
@@ -78,10 +84,18 @@ export default function Influencers() {
         actions={
           <>
             <button className="btn-secondary" onClick={exportCSV}><Download size={15} /> Export CSV</button>
+            <button className="btn-secondary" onClick={() => setShowImport(true)}><Upload size={15} /> Import CSV</button>
             {canWrite && <button className="btn-primary" onClick={() => setShowCreate(true)}><Plus size={16} /> Add Creator</button>}
           </>
         }
       />
+
+      {showImport && (
+        <CSVImportModal
+          onClose={() => setShowImport(false)}
+          onSuccess={() => { setShowImport(false); load(); }}
+        />
+      )}
 
       <div className="card p-4 mb-5">
         <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
@@ -101,29 +115,29 @@ export default function Influencers() {
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-        {influencers.map((inf) => (
+        {(influencers || []).filter(inf => inf && inf.id).map((inf) => (
           <button key={inf.id} onClick={() => setSelected(inf)} className="card p-4 text-left hover:-translate-y-0.5 hover:shadow-popover transition-all">
             <div className="flex items-center gap-3 mb-3">
               <div className="h-11 w-11 rounded-full bg-brand-100 dark:bg-brand-500/20 text-brand-700 dark:text-brand-300 flex items-center justify-center font-display font-bold">
-                {inf.creatorName[0]}
+                {inf.creatorName?.[0]?.toUpperCase() || "?"}
               </div>
               <div className="min-w-0">
-                <p className="font-semibold text-ink-800 dark:text-white truncate">{inf.creatorName}</p>
-                <p className="text-xs text-ink-400">{inf.location} &middot; {inf.language}</p>
+                <p className="font-semibold text-ink-800 dark:text-white truncate">{inf.creatorName || "Unnamed Creator"}</p>
+                <p className="text-xs text-ink-400">{inf.location || "—"} &middot; {inf.language || "—"}</p>
               </div>
             </div>
             <div className="flex items-center gap-2 mb-3">
-              <span className="badge bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-300">{inf.category}</span>
-              <span className="badge bg-ink-100 text-ink-600 dark:bg-ink-700 dark:text-ink-200">{inf.tier}</span>
+              <span className="badge bg-brand-50 text-brand-600 dark:bg-brand-500/10 dark:text-brand-300">{inf.category || "—"}</span>
+              <span className="badge bg-ink-100 text-ink-600 dark:bg-ink-700 dark:text-ink-200">{inf.tier || "—"}</span>
             </div>
             <div className="grid grid-cols-2 gap-2 text-xs text-ink-500 dark:text-ink-300">
-              <div><Instagram size={12} className="inline mr-1" />{fmtFollowers(inf.followers)} followers</div>
-              <div>Engagement {inf.engagementRate}%</div>
-              <div className="col-span-2 font-semibold text-ink-700 dark:text-ink-100">₹{Number(inf.commercialCost).toLocaleString("en-IN")} / deliverable</div>
+              <div><Instagram size={12} className="inline mr-1" />{fmtFollowers(inf.followers || 0)} followers</div>
+              <div>Engagement {inf.engagementRate || 0}%</div>
+              <div className="col-span-2 font-semibold text-ink-700 dark:text-ink-100">₹{Number(inf.commercialCost || 0).toLocaleString("en-IN")} / deliverable</div>
             </div>
           </button>
         ))}
-        {influencers.length === 0 && <p className="text-ink-400 col-span-full text-center py-10">No creators match your filters.</p>}
+        {(influencers || []).length === 0 && <p className="text-ink-400 col-span-full text-center py-10">No creators match your filters.</p>}
       </div>
 
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Add Creator" footer={

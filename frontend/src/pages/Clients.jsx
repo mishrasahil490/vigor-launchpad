@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Download, Upload } from "lucide-react";
 import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import PageHeader from "../components/PageHeader";
@@ -8,6 +8,7 @@ import StatusBadge from "../components/StatusBadge";
 import Modal from "../components/Modal";
 import Drawer from "../components/Drawer";
 import FormField from "../components/FormField";
+import CSVImportModal from "../components/CSVImportModal";
 
 const EMPTY_FORM = {
   brandName: "", contactPerson: "", designation: "", email: "", phone: "",
@@ -19,6 +20,7 @@ export default function Clients() {
   const [clients, setClients] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [selected, setSelected] = useState(null);
   const [history, setHistory] = useState(null);
@@ -27,7 +29,7 @@ export default function Clients() {
 
   function load() {
     setLoading(true);
-    api.get("/clients").then((res) => setClients(res.data.data)).finally(() => setLoading(false));
+    api.get("/clients").then((res) => setClients(res.data?.data || [])).catch(() => setClients([])).finally(() => setLoading(false));
   }
   useEffect(() => {
     load();
@@ -38,7 +40,7 @@ export default function Clients() {
   function openClient(client) {
     setSelected(client);
     setHistory(null);
-    api.get(`/clients/${client.id}/history`).then((res) => setHistory(res.data.data));
+    api.get(`/clients/${client.id}/history`).then((res) => setHistory(res.data?.data || [])).catch(() => setHistory([]));
   }
 
   async function createClient(e) {
@@ -47,6 +49,20 @@ export default function Clients() {
     setShowCreate(false);
     setForm(EMPTY_FORM);
     load();
+  }
+
+  function exportCSV() {
+    const headers = ["brandName", "contactPerson", "designation", "email", "phone", "industry", "gstNumber", "billingAddress", "accountManager"];
+    const rows = [headers.join(",")].concat(
+      clients.map((c) => headers.map((h) => `"${String(c[h] ?? "").replace(/"/g, '""')}"`).join(","))
+    );
+    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "vigor-clients-list.csv";
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   const columns = [
@@ -62,12 +78,26 @@ export default function Clients() {
       <PageHeader
         title="Clients"
         subtitle="Brand accounts, contacts, and relationship history."
-        actions={canWrite && (
-          <button className="btn-primary" onClick={() => setShowCreate(true)}>
-            <Plus size={16} /> New Client
-          </button>
-        )}
+        actions={
+          <>
+            <button className="btn-secondary" onClick={exportCSV}><Download size={15} /> Export CSV</button>
+            {canWrite && <button className="btn-secondary" onClick={() => setShowImport(true)}><Upload size={15} /> Import CSV</button>}
+            {canWrite && (
+              <button className="btn-primary" onClick={() => setShowCreate(true)}>
+                <Plus size={16} /> New Client
+              </button>
+            )}
+          </>
+        }
       />
+
+      {showImport && (
+        <CSVImportModal
+          moduleType="clients"
+          onClose={() => setShowImport(false)}
+          onSuccess={() => { setShowImport(false); load(); }}
+        />
+      )}
 
       {!loading && <DataTable columns={columns} rows={clients} onRowClick={openClient} searchPlaceholder="Search clients..." />}
 

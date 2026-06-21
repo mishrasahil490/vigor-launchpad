@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Download, Upload } from "lucide-react";
 import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import PageHeader from "../components/PageHeader";
@@ -8,6 +8,7 @@ import StatusBadge from "../components/StatusBadge";
 import Modal from "../components/Modal";
 import Drawer from "../components/Drawer";
 import FormField from "../components/FormField";
+import CSVImportModal from "../components/CSVImportModal";
 
 const STATUSES = ["Planning", "Confirmed", "Completed", "Cancelled"];
 const TYPES = ["Brand Activation", "Product Launch", "Influencer Meetup", "Award Night", "Pop-up Store"];
@@ -21,6 +22,7 @@ export default function Events() {
   const [vendors, setVendors] = useState([]);
   const [influencers, setInfluencers] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -31,13 +33,13 @@ export default function Events() {
   const canWrite = user.role === "Super Admin" || user.role === "Manager";
 
   function load() {
-    api.get("/events").then((res) => setEvents(res.data.data));
+    api.get("/events").then((res) => setEvents(res.data?.data || [])).catch(() => setEvents([]));
   }
   useEffect(() => {
     load();
-    api.get("/clients").then((res) => setClients(res.data.data));
-    api.get("/vendors").then((res) => setVendors(res.data.data));
-    api.get("/influencers").then((res) => setInfluencers(res.data.data));
+    api.get("/clients").then((res) => setClients(res.data?.data || [])).catch(() => setClients([]));
+    api.get("/vendors").then((res) => setVendors(res.data?.data || [])).catch(() => setVendors([]));
+    api.get("/influencers").then((res) => setInfluencers(res.data?.data || [])).catch(() => setInfluencers([]));
 
     window.addEventListener("db-change", load);
     return () => window.removeEventListener("db-change", load);
@@ -45,13 +47,13 @@ export default function Events() {
 
   function openEvent(e) {
     setSelectedId(e.id);
-    api.get(`/events/${e.id}`).then((res) => setDetail(res.data.data));
-    api.get(`/events/${e.id}/profitability`).then((res) => setProfitability(res.data.data));
+    api.get(`/events/${e.id}`).then((res) => setDetail(res.data?.data || [])).catch(() => setDetail([]));
+    api.get(`/events/${e.id}/profitability`).then((res) => setProfitability(res.data?.data || [])).catch(() => setProfitability([]));
   }
 
   async function refreshDetail() {
     const res = await api.get(`/events/${selectedId}`);
-    setDetail(res.data.data);
+    setDetail(res.data?.data);
     const prof = await api.get(`/events/${selectedId}/profitability`);
     setProfitability(prof.data.data);
   }
@@ -62,6 +64,20 @@ export default function Events() {
     setShowCreate(false);
     setForm(EMPTY_FORM);
     load();
+  }
+
+  function exportCSV() {
+    const headers = ["eventName", "eventType", "venue", "date", "budget", "status", "description"];
+    const rows = [headers.join(",")].concat(
+      events.map((evt) => headers.map((h) => `"${String(evt[h] ?? "").replace(/"/g, '""')}"`).join(","))
+    );
+    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "vigor-events-list.csv";
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   async function updateStatus(status) {
@@ -96,12 +112,26 @@ export default function Events() {
       <PageHeader
         title="Events"
         subtitle="Plan brand activations, launches, and influencer meetups end-to-end."
-        actions={canWrite && (
-          <button className="btn-primary" onClick={() => setShowCreate(true)}><Plus size={16} /> New Event</button>
-        )}
+        actions={
+          <>
+            <button className="btn-secondary" onClick={exportCSV}><Download size={15} /> Export CSV</button>
+            {canWrite && <button className="btn-secondary" onClick={() => setShowImport(true)}><Upload size={15} /> Import CSV</button>}
+            {canWrite && (
+              <button className="btn-primary" onClick={() => setShowCreate(true)}><Plus size={16} /> New Event</button>
+            )}
+          </>
+        }
       />
 
       <DataTable columns={columns} rows={events} onRowClick={openEvent} searchPlaceholder="Search events..." />
+
+      {showImport && (
+        <CSVImportModal
+          moduleType="events"
+          onClose={() => setShowImport(false)}
+          onSuccess={() => { setShowImport(false); load(); }}
+        />
+      )}
 
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Create Event" footer={
         <>

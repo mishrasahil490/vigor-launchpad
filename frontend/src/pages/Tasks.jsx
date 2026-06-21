@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, MessageSquare } from "lucide-react";
+import { Plus, MessageSquare, Download, Upload } from "lucide-react";
 import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import PageHeader from "../components/PageHeader";
@@ -7,6 +7,7 @@ import StatusBadge from "../components/StatusBadge";
 import Modal from "../components/Modal";
 import Drawer from "../components/Drawer";
 import FormField from "../components/FormField";
+import CSVImportModal from "../components/CSVImportModal";
 
 const STATUSES = ["Pending", "In Progress", "Completed", "Overdue"];
 const PRIORITIES = ["Low", "Medium", "High"];
@@ -18,12 +19,13 @@ export default function Tasks() {
   const { user } = useAuth();
   const [tasks, setTasks] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [selected, setSelected] = useState(null);
   const [comment, setComment] = useState("");
 
   function load() {
-    api.get("/tasks").then((res) => setTasks(res.data.data));
+    api.get("/tasks").then((res) => setTasks(res.data?.data || [])).catch(() => setTasks([]));
   }
   useEffect(() => {
     load();
@@ -32,7 +34,7 @@ export default function Tasks() {
   }, []);
 
   function openTask(t) {
-    api.get(`/tasks/${t.id}`).then((res) => setSelected(res.data.data));
+    api.get(`/tasks/${t.id}`).then((res) => setSelected(res.data?.data || [])).catch(() => setSelected([]));
   }
 
   async function createTask(e) {
@@ -55,7 +57,21 @@ export default function Tasks() {
     await api.post(`/tasks/${selected.id}/comments`, { message: comment });
     setComment("");
     const res = await api.get(`/tasks/${selected.id}`);
-    setSelected(res.data.data);
+    setSelected(res.data?.data);
+  }
+
+  function exportCSV() {
+    const headers = ["title", "description", "priority", "status", "dueDate", "assignedToId", "assignedToName", "linkedType", "linkedId"];
+    const rows = [headers.join(",")].concat(
+      tasks.map((t) => headers.map((h) => `"${String(t[h] ?? "").replace(/"/g, '""')}"`).join(","))
+    );
+    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "vigor-tasks-list.csv";
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   return (
@@ -63,8 +79,22 @@ export default function Tasks() {
       <PageHeader
         title="Tasks"
         subtitle="Stay on top of follow-ups, approvals, and deliverable deadlines."
-        actions={<button className="btn-primary" onClick={() => setShowCreate(true)}><Plus size={16} /> New Task</button>}
+        actions={
+          <>
+            <button className="btn-secondary" onClick={exportCSV}><Download size={15} /> Export CSV</button>
+            <button className="btn-secondary" onClick={() => setShowImport(true)}><Upload size={15} /> Import CSV</button>
+            <button className="btn-primary" onClick={() => setShowCreate(true)}><Plus size={16} /> New Task</button>
+          </>
+        }
       />
+
+      {showImport && (
+        <CSVImportModal
+          moduleType="tasks"
+          onClose={() => setShowImport(false)}
+          onSuccess={() => { setShowImport(false); load(); }}
+        />
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         {STATUSES.map((status) => (

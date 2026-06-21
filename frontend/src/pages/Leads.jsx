@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus, ArrowRightCircle } from "lucide-react";
+import { Plus, ArrowRightCircle, Download, Upload } from "lucide-react";
 import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import PageHeader from "../components/PageHeader";
@@ -8,6 +8,7 @@ import StatusBadge from "../components/StatusBadge";
 import Modal from "../components/Modal";
 import Drawer from "../components/Drawer";
 import FormField from "../components/FormField";
+import CSVImportModal from "../components/CSVImportModal";
 
 const STATUSES = ["New", "Contacted", "Qualified", "Proposal Sent", "Negotiation", "Won", "Lost"];
 const SOURCES = ["Website", "Referral", "Cold Outreach", "Inbound Email", "Event", "Social Media"];
@@ -22,6 +23,7 @@ export default function Leads() {
   const [leads, setLeads] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [selected, setSelected] = useState(null);
   const [activity, setActivity] = useState([]);
@@ -31,7 +33,7 @@ export default function Leads() {
 
   function load() {
     setLoading(true);
-    api.get("/leads").then((res) => setLeads(res.data.data)).finally(() => setLoading(false));
+    api.get("/leads").then((res) => setLeads(res.data?.data || [])).catch(() => setLeads([])).finally(() => setLoading(false));
   }
 
   useEffect(() => {
@@ -42,7 +44,7 @@ export default function Leads() {
 
   function openLead(lead) {
     setSelected(lead);
-    api.get(`/leads/${lead.id}/activity`).then((res) => setActivity(res.data.data));
+    api.get(`/leads/${lead.id}/activity`).then((res) => setActivity(res.data?.data || [])).catch(() => setActivity([]));
   }
 
   async function createLead(e) {
@@ -51,6 +53,20 @@ export default function Leads() {
     setShowCreate(false);
     setForm(EMPTY_FORM);
     load();
+  }
+
+  function exportCSV() {
+    const headers = ["leadName", "brandName", "email", "phone", "source", "status", "estimatedValue"];
+    const rows = [headers.join(",")].concat(
+      leads.map((l) => headers.map((h) => `"${String(l[h] ?? "").replace(/"/g, '""')}"`).join(","))
+    );
+    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "vigor-leads-list.csv";
+    a.click();
+    URL.revokeObjectURL(url);
   }
 
   async function updateStatus(lead, status) {
@@ -64,7 +80,7 @@ export default function Leads() {
     if (!noteText.trim()) return;
     await api.post(`/leads/${selected.id}/activity`, { type: "Note", message: noteText });
     setNoteText("");
-    api.get(`/leads/${selected.id}/activity`).then((res) => setActivity(res.data.data));
+    api.get(`/leads/${selected.id}/activity`).then((res) => setActivity(res.data?.data || [])).catch(() => setActivity([]));
   }
 
   async function convertToClient() {
@@ -89,11 +105,15 @@ export default function Leads() {
         title="Leads"
         subtitle="Track and progress leads through the sales pipeline."
         actions={
-          canWrite && (
-            <button className="btn-primary" onClick={() => setShowCreate(true)}>
-              <Plus size={16} /> New Lead
-            </button>
-          )
+          <>
+            <button className="btn-secondary" onClick={exportCSV}><Download size={15} /> Export CSV</button>
+            {canWrite && <button className="btn-secondary" onClick={() => setShowImport(true)}><Upload size={15} /> Import CSV</button>}
+            {canWrite && (
+              <button className="btn-primary" onClick={() => setShowCreate(true)}>
+                <Plus size={16} /> New Lead
+              </button>
+            )}
+          </>
         }
       />
 
@@ -107,6 +127,14 @@ export default function Leads() {
           </div>
         ))}
       </div>
+
+      {showImport && (
+        <CSVImportModal
+          moduleType="leads"
+          onClose={() => setShowImport(false)}
+          onSuccess={() => { setShowImport(false); load(); }}
+        />
+      )}
 
       {!loading && <DataTable columns={columns} rows={leads} onRowClick={openLead} searchPlaceholder="Search leads..." />}
 

@@ -1,11 +1,12 @@
 import { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Download, Upload } from "lucide-react";
 import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import PageHeader from "../components/PageHeader";
 import DataTable from "../components/DataTable";
 import Modal from "../components/Modal";
 import FormField from "../components/FormField";
+import CSVImportModal from "../components/CSVImportModal";
 
 const CATEGORIES = ["Production", "Photography", "Videography", "Venue", "Hospitality", "Logistics", "Printing", "Digital Marketing", "Other"];
 const EMPTY_FORM = { vendorName: "", serviceType: "Production", contactPerson: "", phone: "", email: "", gstNumber: "", address: "", paymentTerms: "Net 30" };
@@ -14,12 +15,13 @@ export default function Vendors() {
   const { user } = useAuth();
   const [vendors, setVendors] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
 
   const canWrite = ["Super Admin", "Manager", "Finance"].includes(user.role);
 
   function load() {
-    api.get("/vendors").then((res) => setVendors(res.data.data));
+    api.get("/vendors").then((res) => setVendors(res.data?.data || [])).catch(() => setVendors([]));
   }
   useEffect(() => {
     load();
@@ -35,6 +37,20 @@ export default function Vendors() {
     load();
   }
 
+  function exportCSV() {
+    const headers = ["vendorName", "serviceType", "contactPerson", "phone", "email", "gstNumber", "address", "paymentTerms"];
+    const rows = [headers.join(",")].concat(
+      vendors.map((v) => headers.map((h) => `"${String(v[h] ?? "").replace(/"/g, '""')}"`).join(","))
+    );
+    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "vigor-vendors-list.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   const columns = [
     { key: "vendorName", label: "Vendor" },
     { key: "serviceType", label: "Category" },
@@ -48,11 +64,25 @@ export default function Vendors() {
       <PageHeader
         title="Vendors"
         subtitle="Production, photography, venue, and logistics partners."
-        actions={canWrite && (
-          <button className="btn-primary" onClick={() => setShowCreate(true)}><Plus size={16} /> New Vendor</button>
-        )}
+        actions={
+          <>
+            <button className="btn-secondary" onClick={exportCSV}><Download size={15} /> Export CSV</button>
+            {canWrite && <button className="btn-secondary" onClick={() => setShowImport(true)}><Upload size={15} /> Import CSV</button>}
+            {canWrite && (
+              <button className="btn-primary" onClick={() => setShowCreate(true)}><Plus size={16} /> New Vendor</button>
+            )}
+          </>
+        }
       />
       <DataTable columns={columns} rows={vendors} searchPlaceholder="Search vendors..." />
+
+      {showImport && (
+        <CSVImportModal
+          moduleType="vendors"
+          onClose={() => setShowImport(false)}
+          onSuccess={() => { setShowImport(false); load(); }}
+        />
+      )}
 
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Add Vendor" footer={
         <>

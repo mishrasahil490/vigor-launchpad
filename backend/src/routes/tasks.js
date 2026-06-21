@@ -48,6 +48,35 @@ router.post("/", (req, res) => {
   res.status(201).json({ data: row });
 });
 
+router.post("/bulk", (req, res) => {
+  const records = req.body;
+  if (!Array.isArray(records) || records.length === 0) {
+    return res.status(400).json({ error: "Expected a non-empty array of task records." });
+  }
+  const inserted = [];
+  const errors = [];
+  records.forEach((record, i) => {
+    try {
+      const row = db.insert("tasks", {
+        title: record.title,
+        description: record.description || "",
+        priority: record.priority || "Medium",
+        status: record.status || "Pending",
+        dueDate: record.dueDate,
+        assignedToId: record.assignedToId,
+        assignedToName: record.assignedToName,
+        linkedType: record.linkedType || null,
+        linkedId: record.linkedId || null,
+        createdBy: req.user.name,
+      });
+      inserted.push(row);
+    } catch (err) {
+      errors.push({ row: i + 1, error: err.message });
+    }
+  });
+  res.status(201).json({ inserted: inserted.length, errors });
+});
+
 router.put("/:id", (req, res) => {
   const row = db.update("tasks", req.params.id, req.body);
   if (!row) return res.status(404).json({ error: "Task not found." });

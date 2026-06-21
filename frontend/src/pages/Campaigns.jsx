@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Plus } from "lucide-react";
+import { Plus, Download, Upload } from "lucide-react";
 import api from "../api/client";
 import { useAuth } from "../context/AuthContext";
 import PageHeader from "../components/PageHeader";
@@ -8,6 +8,7 @@ import StatusBadge from "../components/StatusBadge";
 import Modal from "../components/Modal";
 import Drawer from "../components/Drawer";
 import FormField from "../components/FormField";
+import CSVImportModal from "../components/CSVImportModal";
 
 const STATUSES = ["Planning", "Active", "In Progress", "Content Approval", "Live", "Completed", "Cancelled"];
 const TYPES = ["Product Launch", "Brand Awareness", "Festive Sale", "App Install", "UGC Drive"];
@@ -20,6 +21,7 @@ export default function Campaigns() {
   const [clients, setClients] = useState([]);
   const [influencers, setInfluencers] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
+  const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [selectedId, setSelectedId] = useState(null);
   const [detail, setDetail] = useState(null);
@@ -29,12 +31,12 @@ export default function Campaigns() {
   const canWrite = user.role === "Super Admin" || user.role === "Manager";
 
   function load() {
-    api.get("/campaigns").then((res) => setCampaigns(res.data.data));
+    api.get("/campaigns").then((res) => setCampaigns(res.data?.data || [])).catch(() => setCampaigns([]));
   }
   useEffect(() => {
     load();
-    api.get("/clients").then((res) => setClients(res.data.data));
-    api.get("/influencers").then((res) => setInfluencers(res.data.data));
+    api.get("/clients").then((res) => setClients(res.data?.data || [])).catch(() => setClients([]));
+    api.get("/influencers").then((res) => setInfluencers(res.data?.data || [])).catch(() => setInfluencers([]));
 
     window.addEventListener("db-change", load);
     return () => window.removeEventListener("db-change", load);
@@ -42,8 +44,8 @@ export default function Campaigns() {
 
   function openCampaign(c) {
     setSelectedId(c.id);
-    api.get(`/campaigns/${c.id}`).then((res) => setDetail(res.data.data));
-    api.get(`/campaigns/${c.id}/profitability`).then((res) => setProfitability(res.data.data));
+    api.get(`/campaigns/${c.id}`).then((res) => setDetail(res.data?.data || [])).catch(() => setDetail([]));
+    api.get(`/campaigns/${c.id}/profitability`).then((res) => setProfitability(res.data?.data || [])).catch(() => setProfitability([]));
   }
 
   async function createCampaign(e) {
@@ -60,6 +62,20 @@ export default function Campaigns() {
     load();
   }
 
+  function exportCSV() {
+    const headers = ["campaignName", "clientId", "campaignType", "startDate", "endDate", "budget", "status"];
+    const rows = [headers.join(",")].concat(
+      campaigns.map((c) => headers.map((h) => `"${String(c[h] ?? "").replace(/"/g, '""')}"`).join(","))
+    );
+    const blob = new Blob([rows.join("\n")], { type: "text/csv" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = "vigor-campaigns-list.csv";
+    a.click();
+    URL.revokeObjectURL(url);
+  }
+
   async function updateStatus(status) {
     await api.put(`/campaigns/${selectedId}`, { status });
     setDetail((d) => ({ ...d, status }));
@@ -72,7 +88,7 @@ export default function Campaigns() {
     await api.post(`/campaigns/${selectedId}/influencers`, { influencerId: inf.id, agreedCost: inf.commercialCost, deliverableType: "Reel" });
     setAssignInfluencerId("");
     const res = await api.get(`/campaigns/${selectedId}`);
-    setDetail(res.data.data);
+    setDetail(res.data?.data);
     const prof = await api.get(`/campaigns/${selectedId}/profitability`);
     setProfitability(prof.data.data);
   }
@@ -99,12 +115,26 @@ export default function Campaigns() {
       <PageHeader
         title="Campaigns"
         subtitle="Plan, execute, and track influencer marketing campaigns."
-        actions={canWrite && (
-          <button className="btn-primary" onClick={() => setShowCreate(true)}><Plus size={16} /> New Campaign</button>
-        )}
+        actions={
+          <>
+            <button className="btn-secondary" onClick={exportCSV}><Download size={15} /> Export CSV</button>
+            {canWrite && <button className="btn-secondary" onClick={() => setShowImport(true)}><Upload size={15} /> Import CSV</button>}
+            {canWrite && (
+              <button className="btn-primary" onClick={() => setShowCreate(true)}><Plus size={16} /> New Campaign</button>
+            )}
+          </>
+        }
       />
 
       <DataTable columns={columns} rows={campaigns} onRowClick={openCampaign} searchPlaceholder="Search campaigns..." />
+
+      {showImport && (
+        <CSVImportModal
+          moduleType="campaigns"
+          onClose={() => setShowImport(false)}
+          onSuccess={() => { setShowImport(false); load(); }}
+        />
+      )}
 
       <Modal open={showCreate} onClose={() => setShowCreate(false)} title="Create Campaign" footer={
         <>
