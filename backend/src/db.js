@@ -233,26 +233,32 @@ const db = {
       return;
     }
     
-    console.log("🔄 Loading database cache from Supabase...");
-    for (const table of tables) {
-      const dbTable = getSupabaseTableName(table);
-      try {
-        const { data, error } = await supabase
-          .from(dbTable)
-          .select("*")
-          .order("id", { ascending: true });
-          
-        if (error) {
-          console.error(`Error fetching table "${dbTable}" from Supabase:`, error.message);
+    console.log("🔄 Loading database cache from Supabase (in parallel)...");
+    try {
+      const promises = tables.map(async (table) => {
+        const dbTable = getSupabaseTableName(table);
+        try {
+          const { data, error } = await supabase
+            .from(dbTable)
+            .select("*")
+            .order("id", { ascending: true });
+            
+          if (error) {
+            console.error(`Error fetching table "${dbTable}" from Supabase:`, error.message);
+            cache[table] = [];
+          } else {
+            cache[table] = (data || []).map(mapFromDb);
+          }
+        } catch (err) {
+          console.error(`Failed to load table "${dbTable}" from Supabase:`, err);
           cache[table] = [];
-        } else {
-          cache[table] = (data || []).map(mapFromDb);
-          console.log(`  Loaded ${cache[table].length} rows for "${table}"`);
         }
-      } catch (err) {
-        console.error(`Failed to load table "${dbTable}" from Supabase:`, err);
-        cache[table] = [];
-      }
+      });
+      
+      await Promise.all(promises);
+      console.log(`✅ Loaded ${tables.length} tables in parallel.`);
+    } catch (err) {
+      console.error("Critical error during parallel database cache loading:", err);
     }
     console.log("✅ Supabase cache initialization complete.");
 
