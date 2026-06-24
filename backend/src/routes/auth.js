@@ -203,7 +203,8 @@ router.delete("/users/:id", authenticate, authorize("Super Admin"), async (req, 
   try {
     if (existing.authId) {
       const { error: authError } = await db.supabase.auth.admin.deleteUser(existing.authId);
-      if (authError) {
+      // If the auth user doesn't exist in Supabase Auth (e.g., deleted during seeding), ignore and proceed to delete from public.users
+      if (authError && authError.status !== 404 && !authError.message.toLowerCase().includes("not found")) {
         return res.status(400).json({ error: authError.message });
       }
     }
