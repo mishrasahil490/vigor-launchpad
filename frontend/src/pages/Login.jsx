@@ -4,18 +4,11 @@ import { useAuth } from "../context/AuthContext";
 import { Loader2, ArrowLeft, MailCheck } from "lucide-react";
 import api from "../api/client";
 
-const DEMO_ACCOUNTS = [
-  { role: "Super Admin", email: "admin@vigorlaunchpad.com", password: "Admin@123" },
-  { role: "Manager", email: "priya.manager@vigorlaunchpad.com", password: "Manager@123" },
-  { role: "Employee", email: "sneha.employee@vigorlaunchpad.com", password: "Employee@123" },
-  { role: "Finance", email: "neha.finance@vigorlaunchpad.com", password: "Finance@123" },
-];
-
 export default function Login() {
   const { login } = useAuth();
   const navigate = useNavigate();
-  const [email, setEmail] = useState("admin@vigorlaunchpad.com");
-  const [password, setPassword] = useState("Admin@123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -99,7 +92,6 @@ export default function Login() {
             <>
               <h2 className="font-display text-2xl font-bold text-ink-900 dark:text-white mb-1">Welcome back</h2>
               <p className="text-sm text-ink-500 dark:text-ink-300 mb-6">Sign in to your operations dashboard.</p>
-
               <form onSubmit={handleSubmit} className="space-y-4">
                 <div>
                   <label className="label">Email</label>
@@ -140,25 +132,6 @@ export default function Login() {
                   Sign in
                 </button>
               </form>
-
-              <div className="mt-6 pt-5 border-t border-ink-100 dark:border-ink-700">
-                <p className="text-xs font-semibold text-ink-400 uppercase tracking-wide mb-2">Quick demo access</p>
-                <div className="grid grid-cols-2 gap-2">
-                  {DEMO_ACCOUNTS.map((acc) => (
-                    <button
-                      key={acc.role}
-                      type="button"
-                      onClick={() => {
-                        setEmail(acc.email);
-                        setPassword(acc.password);
-                      }}
-                      className="btn-secondary !py-1.5 !text-xs justify-center"
-                    >
-                      {acc.role}
-                    </button>
-                  ))}
-                </div>
-              </div>
             </>
           ) : (
             /* ── Forgot Password Panel ── */
