@@ -42,7 +42,20 @@ async function authenticate(req, res, next) {
     }
     
     // Find the user's custom profile from users table
-    const profile = db.findOne("users", (u) => u.authId === user.id || (u.email && u.email.toLowerCase() === user.email.toLowerCase()));
+    let profile = db.findOne("users", (u) => u.authId === user.id || (u.email && u.email.toLowerCase() === user.email.toLowerCase()));
+    if (!profile && db.supabase) {
+      const { data: dbData, error: dbError } = await db.supabase
+        .from("users")
+        .select("*")
+        .or(`auth_id.eq.${user.id},email.eq.${user.email.toLowerCase()}`)
+        .maybeSingle();
+      if (!dbError && dbData) {
+        const mapped = db.mapFromDb(dbData);
+        db.all("users").push(mapped);
+        profile = mapped;
+      }
+    }
+
     if (!profile) {
       return res.status(401).json({ error: "User profile not found in database." });
     }

@@ -208,6 +208,7 @@ function deleteFromSupabase(table, id) {
 }
 
 const db = {
+  mapFromDb,
   // Initialize and load all tables from Supabase into memory
   async init() {
     if (!supabase) {

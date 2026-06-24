@@ -50,6 +50,19 @@ router.post("/login", async (req, res) => {
     }
 
     let user = db.findOne("users", (u) => u.email.toLowerCase() === String(email).toLowerCase());
+    if (!user && db.supabase) {
+      const { data: dbData, error: dbError } = await db.supabase
+        .from("users")
+        .select("*")
+        .eq("email", email.toLowerCase())
+        .maybeSingle();
+      if (!dbError && dbData) {
+        const mapped = db.mapFromDb(dbData);
+        db.all("users").push(mapped);
+        user = mapped;
+      }
+    }
+
     if (!user) {
       return res.status(401).json({ error: "User profile not found in database." });
     }
