@@ -15,6 +15,19 @@ if (supabaseUrl && supabaseKey && supabaseUrl !== "YOUR_SUPABASE_PROJECT_URL" &&
   console.warn("⚠️ Supabase credentials not configured in .env. Running in offline/fallback mode (reads/writes in-memory only).");
 }
 
+function saveLocalTable(table) {
+  if (supabase) return;
+  const fs = require("fs");
+  const path = require("path");
+  const DATA_DIR = path.join(__dirname, "..", "data");
+  if (!fs.existsSync(DATA_DIR)) {
+    fs.mkdirSync(DATA_DIR, { recursive: true });
+  }
+  const fp = path.join(DATA_DIR, `${table}.json`);
+  fs.writeFileSync(fp, JSON.stringify(cache[table] || [], null, 2), "utf-8");
+}
+
+
 // In-memory cache
 const changeListeners = [];
 
@@ -31,9 +44,10 @@ function notifyChange(table, eventType, id) {
 const cache = {};
 const tables = [
   "users", "leads", "activities", "clients", "influencers", "influencerLists",
-  "campaigns", "campaignInfluencers", "deliverables", "vendors", "events",
+  "campaigns", "campaignShortlist", "vendors", "events",
   "eventVendors", "eventInfluencers", "eventSponsors", "tasks", "invoices",
-  "vendorPayments", "expenses", "notifications", "documents"
+  "vendorPayments", "expenses", "notifications", "documents", "comments", "taskComments",
+  "vigorZones", "vigorStates", "vigorCities", "vigorColleges", "vigorCollegePocs"
 ];
 
 tables.forEach((t) => {
@@ -52,12 +66,17 @@ function toCamelCase(str) {
 }
 
 const tableMap = {
-  campaignInfluencers: "campaign_influencers",
+  campaignShortlist: "campaign_shortlist",
   influencerLists: "influencer_lists",
   eventInfluencers: "event_influencers",
   eventSponsors: "event_sponsors",
   eventVendors: "event_vendors",
   vendorPayments: "vendor_payments",
+  vigorZones: "vigor_zones",
+  vigorStates: "vigor_states",
+  vigorCities: "vigor_cities",
+  vigorColleges: "vigor_colleges",
+  vigorCollegePocs: "vigor_college_pocs",
 };
 
 function getSupabaseTableName(table) {
@@ -94,6 +113,56 @@ function mapFromDb(dbRecord) {
 
 function nextId(rows) {
   return rows.reduce((max, r) => (r.id > max ? r.id : max), 0) + 1;
+}
+
+// ─── Default Permissions by Role ────────────────────────────────────────────
+const ENTITIES = ["leads", "clients", "influencers", "campaigns", "events", "vendors", "tasks", "finance", "reports"];
+
+function defaultPermissions(role) {
+  if (role === "Super Admin") {
+    // Super Admin always has full access — permissions object is irrelevant but kept for consistency
+    const actions = {};
+    ENTITIES.forEach((e) => {
+      actions[e] = { view: true, create: true, edit: true, delete: true, exportCSV: true };
+    });
+    return {
+      pages: ["dashboard", "leads", "clients", "influencers", "campaigns", "events", "vendors", "tasks", "finance", "reports", "vigor-space", "settings"],
+      vigorSpace: { canViewZones: "*", canManageZones: true, canExportCSV: true },
+      actions,
+    };
+  }
+  if (role === "Manager") {
+    const actions = {};
+    ENTITIES.forEach((e) => {
+      actions[e] = { view: true, create: true, edit: true, delete: false, exportCSV: true };
+    });
+    return {
+      pages: ["dashboard", "leads", "clients", "influencers", "campaigns", "events", "vendors", "tasks", "finance", "reports", "vigor-space"],
+      vigorSpace: { canViewZones: "*", canManageZones: true, canExportCSV: true },
+      actions,
+    };
+  }
+  if (role === "Finance") {
+    const actions = {};
+    ENTITIES.forEach((e) => {
+      actions[e] = { view: e === "finance" || e === "clients" || e === "vendors" || e === "reports", create: e === "finance", edit: e === "finance", delete: false, exportCSV: e === "finance" || e === "reports" };
+    });
+    return {
+      pages: ["dashboard", "clients", "vendors", "finance", "reports"],
+      vigorSpace: { canViewZones: "*", canManageZones: false, canExportCSV: false },
+      actions,
+    };
+  }
+  // Employee default
+  const actions = {};
+  ENTITIES.forEach((e) => {
+    actions[e] = { view: e !== "finance", create: e === "tasks" || e === "leads", edit: e === "tasks", delete: false, exportCSV: false };
+  });
+  return {
+    pages: ["dashboard", "leads", "clients", "influencers", "campaigns", "events", "tasks", "vigor-space"],
+    vigorSpace: { canViewZones: "*", canManageZones: false, canExportCSV: false },
+    actions,
+  };
 }
 
 const pendingPromises = [];
@@ -142,7 +211,25 @@ const db = {
   // Initialize and load all tables from Supabase into memory
   async init() {
     if (!supabase) {
-      console.warn("⚠️ Supabase client not initialized. Working in local-only mock mode.");
+      console.warn("⚠️ Supabase client not initialized. Working in local-only mock mode with JSON file persistence.");
+      const fs = require("fs");
+      const path = require("path");
+      const DATA_DIR = path.join(__dirname, "..", "data");
+      for (const table of tables) {
+        const fp = path.join(DATA_DIR, `${table}.json`);
+        if (fs.existsSync(fp)) {
+          try {
+            const raw = fs.readFileSync(fp, "utf-8");
+            cache[table] = JSON.parse(raw || "[]");
+            console.log(`  Loaded ${cache[table].length} rows for "${table}" from local JSON`);
+          } catch (err) {
+            console.error(`Error parsing local file for ${table}:`, err);
+            cache[table] = [];
+          }
+        } else {
+          cache[table] = [];
+        }
+      }
       return;
     }
     
@@ -249,10 +336,24 @@ const db = {
     return (cache[table] || []).find((r) => r.id === Number(id)) || null;
   },
 
-  insert(table, record) {
+  insert(table, record, user) {
     const rows = cache[table] || [];
     const now = new Date().toISOString();
     const row = { id: nextId(rows), createdAt: now, updatedAt: now, ...record };
+    
+    if (user) {
+      const userName = user.name || user;
+      row.createdBy = userName;
+      row.updatedBy = userName;
+      row.history = [
+        {
+          user: userName,
+          action: "Created",
+          timestamp: now
+        }
+      ];
+    }
+    
     rows.push(row);
     cache[table] = rows;
     
@@ -260,22 +361,61 @@ const db = {
     saveToSupabase(table, row);
     
     if (!supabase) {
+      saveLocalTable(table);
       notifyChange(table, "INSERT", row.id);
     }
     
     return row;
   },
 
-  update(table, id, patch) {
+  update(table, id, patch, user) {
     const rows = cache[table] || [];
     const idx = rows.findIndex((r) => r.id === Number(id));
     if (idx === -1) return null;
     
+    const existing = rows[idx];
+    const now = new Date().toISOString();
+    
+    let history = Array.isArray(existing.history) ? [...existing.history] : [];
+    let updatedBy = existing.updatedBy;
+    
+    if (user) {
+      const userName = user.name || user;
+      const changedFields = [];
+      const ignoreKeys = ["id", "createdAt", "updatedAt", "createdBy", "updatedBy", "history"];
+      Object.keys(patch).forEach((key) => {
+        if (ignoreKeys.includes(key)) return;
+        if (JSON.stringify(patch[key]) !== JSON.stringify(existing[key])) {
+          // Format keys nicely
+          const readableKey = key.replace(/([A-Z])/g, ' $1').toLowerCase();
+          changedFields.push(readableKey);
+        }
+      });
+      
+      if (changedFields.length > 0) {
+        history.push({
+          user: userName,
+          action: `Updated fields: ${changedFields.join(", ")}`,
+          timestamp: now
+        });
+      } else {
+        // If it's a generic change with no fields specified or same content
+        history.push({
+          user: userName,
+          action: "Updated",
+          timestamp: now
+        });
+      }
+      updatedBy = userName;
+    }
+    
     rows[idx] = { 
-      ...rows[idx], 
+      ...existing, 
       ...patch, 
-      id: rows[idx].id, 
-      updatedAt: new Date().toISOString() 
+      history,
+      updatedBy,
+      id: existing.id, 
+      updatedAt: now 
     };
     cache[table] = rows;
     
@@ -283,6 +423,7 @@ const db = {
     saveToSupabase(table, rows[idx]);
     
     if (!supabase) {
+      saveLocalTable(table);
       notifyChange(table, "UPDATE", rows[idx].id);
     }
     
@@ -301,6 +442,7 @@ const db = {
     deleteFromSupabase(table, Number(id));
     
     if (!supabase) {
+      saveLocalTable(table);
       notifyChange(table, "DELETE", Number(id));
     }
     
@@ -309,7 +451,10 @@ const db = {
 
   async replaceAll(table, rows) {
     cache[table] = rows;
-    if (!supabase) return;
+    if (!supabase) {
+      saveLocalTable(table);
+      return;
+    }
     
     const dbTable = getSupabaseTableName(table);
     const dbRows = rows.map(mapToDb);
@@ -338,7 +483,8 @@ const db = {
     } catch (err) {
       console.error(`Failed to replaceAll in ${dbTable}:`, err);
     }
-  }
+  },
+  defaultPermissions
 };
 
 db.supabase = supabase;

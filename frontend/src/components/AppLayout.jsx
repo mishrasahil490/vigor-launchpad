@@ -3,10 +3,51 @@ import { Outlet } from "react-router-dom";
 import Sidebar from "./Sidebar";
 import Topbar from "./Topbar";
 
+// ── Supabase Realtime (production) ───────────────────────────────────────────
+// When VITE_SUPABASE_URL + VITE_SUPABASE_ANON_KEY are set (i.e. on Vercel),
+// we use Supabase's built-in WebSocket realtime instead of custom SSE.
+// In local dev those vars are absent so we fall back to the SSE endpoint.
+const SUPABASE_URL = import.meta.env.VITE_SUPABASE_URL;
+const SUPABASE_ANON_KEY = import.meta.env.VITE_SUPABASE_ANON_KEY;
+
 export default function AppLayout() {
   const [sidebarOpen, setSidebarOpen] = useState(false);
 
   useEffect(() => {
+    // ── Strategy 1: Supabase Realtime (Vercel / production) ──────────────────
+    if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+      let channel = null;
+
+      import("@supabase/supabase-js").then(({ createClient }) => {
+        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        channel = supabase
+          .channel("vigor-realtime")
+          .on(
+            "postgres_changes",
+            { event: "*", schema: "public" },
+            (payload) => {
+              console.log("Supabase Realtime change:", payload);
+              window.dispatchEvent(
+                new CustomEvent("db-change", { detail: payload })
+              );
+            }
+          )
+          .subscribe((status) => {
+            console.log("Supabase Realtime status:", status);
+          });
+      });
+
+      return () => {
+        if (channel) {
+          import("@supabase/supabase-js").then(({ createClient }) => {
+            const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+            supabase.removeChannel(channel);
+          });
+        }
+      };
+    }
+
+    // ── Strategy 2: SSE fallback (local development) ─────────────────────────
     const token = localStorage.getItem("vigor_token");
     if (!token) return;
 

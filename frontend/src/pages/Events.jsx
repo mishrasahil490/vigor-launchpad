@@ -9,6 +9,13 @@ import Modal from "../components/Modal";
 import Drawer from "../components/Drawer";
 import FormField from "../components/FormField";
 import CSVImportModal from "../components/CSVImportModal";
+import CommentsPanel from "../components/CommentsPanel";
+import { usePermissions } from "../context/PermissionsContext";
+
+function fmtDate(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
 
 const STATUSES = ["Planning", "Confirmed", "Completed", "Cancelled"];
 const TYPES = ["Brand Activation", "Product Launch", "Influencer Meetup", "Award Night", "Pop-up Store"];
@@ -30,7 +37,11 @@ export default function Events() {
   const [vendorPick, setVendorPick] = useState("");
   const [vendorCost, setVendorCost] = useState("");
 
-  const canWrite = user.role === "Super Admin" || user.role === "Manager";
+  const { can, canExportCSV } = usePermissions();
+  const canCreate = can("events", "create");
+  const canEdit = can("events", "edit");
+  const canDelete = can("events", "delete");
+  const canExport = canExportCSV("events");
 
   function load() {
     api.get("/events").then((res) => setEvents(res.data?.data || [])).catch(() => setEvents([]));
@@ -64,6 +75,18 @@ export default function Events() {
     setShowCreate(false);
     setForm(EMPTY_FORM);
     load();
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm("Are you sure you want to delete this event?")) return;
+    try {
+      await api.delete(`/events/${id}`);
+      setSelectedId(null);
+      load();
+    } catch (err) {
+      console.error("Error deleting event:", err);
+      alert("Failed to delete event.");
+    }
   }
 
   function exportCSV() {
@@ -102,9 +125,11 @@ export default function Events() {
     { key: "eventName", label: "Event" },
     { key: "eventType", label: "Type" },
     { key: "venue", label: "Venue" },
-    { key: "date", label: "Date" },
+    { key: "date", label: "Event Date" },
     { key: "budget", label: "Budget", render: (r) => `₹${Number(r.budget).toLocaleString("en-IN")}` },
     { key: "status", label: "Status", render: (r) => <StatusBadge status={r.status} /> },
+    { key: "createdBy", label: "Added By", render: (r) => <span className="text-xs text-ink-500">{r.createdBy || "System"}</span> },
+    { key: "createdAt", label: "Date Added", render: (r) => <span className="text-xs text-ink-400">{fmtDate(r.createdAt)}</span> },
   ];
 
   return (
@@ -114,9 +139,9 @@ export default function Events() {
         subtitle="Plan brand activations, launches, and influencer meetups end-to-end."
         actions={
           <>
-            <button className="btn-secondary" onClick={exportCSV}><Download size={15} /> Export CSV</button>
-            {canWrite && <button className="btn-secondary" onClick={() => setShowImport(true)}><Upload size={15} /> Import CSV</button>}
-            {canWrite && (
+            {canExport && <button className="btn-secondary" onClick={exportCSV}><Download size={15} /> Export CSV</button>}
+            {canCreate && <button className="btn-secondary" onClick={() => setShowImport(true)}><Upload size={15} /> Import CSV</button>}
+            {canCreate && (
               <button className="btn-primary" onClick={() => setShowCreate(true)}><Plus size={16} /> New Event</button>
             )}
           </>
@@ -159,6 +184,12 @@ export default function Events() {
       <Drawer open={!!selectedId} onClose={() => setSelectedId(null)} title={detail?.eventName} subtitle={detail?.venue} width="max-w-2xl">
         {detail && (
           <div className="space-y-6">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="text-[11px] bg-ink-100 dark:bg-ink-700 text-ink-500 dark:text-ink-300 rounded-full px-2.5 py-0.5 font-medium">
+                Added {fmtDate(detail.createdAt)}{detail.createdBy ? ` by ${detail.createdBy}` : ""}
+              </span>
+              <StatusBadge status={detail.status} />
+            </div>
             <div>
               <p className="label mb-2">Status</p>
               <div className="flex flex-wrap gap-2">
@@ -178,14 +209,16 @@ export default function Events() {
 
             <div>
               <p className="label mb-2">Vendor Allocation</p>
-              <div className="flex gap-2 mb-3">
-                <select className="input" value={vendorPick} onChange={(e) => setVendorPick(e.target.value)}>
-                  <option value="">Select vendor...</option>
-                  {vendors.map((v) => <option key={v.id} value={v.id}>{v.vendorName}</option>)}
-                </select>
-                <input className="input w-32" type="number" placeholder="Cost ₹" value={vendorCost} onChange={(e) => setVendorCost(e.target.value)} />
-                <button className="btn-secondary" onClick={allocateVendor}>Add</button>
-              </div>
+              {canEdit && (
+                <div className="flex gap-2 mb-3">
+                  <select className="input" value={vendorPick} onChange={(e) => setVendorPick(e.target.value)}>
+                    <option value="">Select vendor...</option>
+                    {vendors.map((v) => <option key={v.id} value={v.id}>{v.vendorName}</option>)}
+                  </select>
+                  <input className="input w-32" type="number" placeholder="Cost ₹" value={vendorCost} onChange={(e) => setVendorCost(e.target.value)} />
+                  <button className="btn-secondary" onClick={allocateVendor}>Add</button>
+                </div>
+              )}
               <div className="space-y-2">
                 {detail.vendors?.map((v) => (
                   <div key={v.id} className="flex items-center justify-between border border-ink-100 dark:border-ink-700 rounded-lg px-3 py-2 text-sm">
@@ -222,6 +255,16 @@ export default function Events() {
                 {(!detail.sponsors || detail.sponsors.length === 0) && <p className="text-sm text-ink-400">No sponsors yet.</p>}
               </div>
             </div>
+            <hr className="border-ink-100 dark:border-ink-700" />
+            <CommentsPanel entityType="event" entityId={selectedId} />
+            {canDelete && (
+              <button
+                onClick={() => handleDelete(selectedId)}
+                className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold py-2 px-4 rounded w-full mt-6 transition-colors"
+              >
+                Delete Event
+              </button>
+            )}
           </div>
         )}
       </Drawer>

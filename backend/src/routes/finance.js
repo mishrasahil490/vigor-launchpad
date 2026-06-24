@@ -18,12 +18,12 @@ router.post("/invoices", (req, res) => {
   const row = db.insert("invoices", {
     status: "Unpaid",
     ...req.body,
-  });
+  }, req.user);
   res.status(201).json({ data: row });
 });
 
 router.put("/invoices/:id", (req, res) => {
-  const row = db.update("invoices", req.params.id, req.body);
+  const row = db.update("invoices", req.params.id, req.body, req.user);
   if (!row) return res.status(404).json({ error: "Invoice not found." });
   res.json({ data: row });
 });
@@ -43,12 +43,12 @@ router.get("/vendor-payments", (req, res) => {
 });
 
 router.post("/vendor-payments", (req, res) => {
-  const row = db.insert("vendorPayments", { status: "Pending", ...req.body });
+  const row = db.insert("vendorPayments", { status: "Pending", ...req.body }, req.user);
   res.status(201).json({ data: row });
 });
 
 router.put("/vendor-payments/:id", (req, res) => {
-  const row = db.update("vendorPayments", req.params.id, req.body);
+  const row = db.update("vendorPayments", req.params.id, req.body, req.user);
   if (!row) return res.status(404).json({ error: "Vendor payment not found." });
   res.json({ data: row });
 });
@@ -58,7 +58,7 @@ router.get("/expenses", (req, res) => {
   res.json({ data: db.all("expenses") });
 });
 router.post("/expenses", (req, res) => {
-  const row = db.insert("expenses", req.body);
+  const row = db.insert("expenses", req.body, req.user);
   res.status(201).json({ data: row });
 });
 

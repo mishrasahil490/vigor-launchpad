@@ -9,6 +9,16 @@ import Modal from "../components/Modal";
 import Drawer from "../components/Drawer";
 import FormField from "../components/FormField";
 import CSVImportModal from "../components/CSVImportModal";
+import CommentsPanel from "../components/CommentsPanel";
+import MaskedField from "../components/MaskedField";
+import { usePermissions } from "../context/PermissionsContext";
+
+function fmtDate(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
+
+const STATUSES = ["Active", "Inactive", "On Hold"];
 
 const EMPTY_FORM = {
   brandName: "", contactPerson: "", designation: "", email: "", phone: "",
@@ -25,7 +35,10 @@ export default function Clients() {
   const [selected, setSelected] = useState(null);
   const [history, setHistory] = useState(null);
 
-  const canWrite = user.role === "Super Admin" || user.role === "Manager";
+  const { can, canExportCSV } = usePermissions();
+  const canCreate = can("clients", "create");
+  const canDelete = can("clients", "delete");
+  const canExport = canExportCSV("clients");
 
   function load() {
     setLoading(true);
@@ -43,12 +56,30 @@ export default function Clients() {
     api.get(`/clients/${client.id}/history`).then((res) => setHistory(res.data?.data || [])).catch(() => setHistory([]));
   }
 
+  async function updateStatus(status) {
+    await api.put(`/clients/${selected.id}`, { status });
+    setSelected((s) => (s ? { ...s, status } : null));
+    load();
+  }
+
   async function createClient(e) {
     e.preventDefault();
     await api.post("/clients", { ...form, status: "Active", accountManagerId: user.id });
     setShowCreate(false);
     setForm(EMPTY_FORM);
     load();
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm("Are you sure you want to delete this client?")) return;
+    try {
+      await api.delete(`/clients/${id}`);
+      setSelected(null);
+      load();
+    } catch (err) {
+      console.error("Error deleting client:", err);
+      alert("Failed to delete client.");
+    }
   }
 
   function exportCSV() {
@@ -71,6 +102,7 @@ export default function Clients() {
     { key: "industry", label: "Industry" },
     { key: "accountManager", label: "Account Manager" },
     { key: "status", label: "Status", render: (r) => <StatusBadge status={r.status} /> },
+    { key: "createdAt", label: "Date Added", render: (r) => <span className="text-xs text-ink-400">{fmtDate(r.createdAt)}</span> },
   ];
 
   return (
@@ -80,9 +112,9 @@ export default function Clients() {
         subtitle="Brand accounts, contacts, and relationship history."
         actions={
           <>
-            <button className="btn-secondary" onClick={exportCSV}><Download size={15} /> Export CSV</button>
-            {canWrite && <button className="btn-secondary" onClick={() => setShowImport(true)}><Upload size={15} /> Import CSV</button>}
-            {canWrite && (
+            {canExport && <button className="btn-secondary" onClick={exportCSV}><Download size={15} /> Export CSV</button>}
+            {canCreate && <button className="btn-secondary" onClick={() => setShowImport(true)}><Upload size={15} /> Import CSV</button>}
+            {canCreate && (
               <button className="btn-primary" onClick={() => setShowCreate(true)}>
                 <Plus size={16} /> New Client
               </button>
@@ -141,11 +173,25 @@ export default function Clients() {
       <Drawer open={!!selected} onClose={() => setSelected(null)} title={selected?.brandName} subtitle={selected?.industry}>
         {selected && (
           <div className="space-y-6">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] bg-ink-100 dark:bg-ink-700 text-ink-500 dark:text-ink-300 rounded-full px-2.5 py-0.5 font-medium">
+                Added {fmtDate(selected.createdAt)}{selected.createdBy ? ` by ${selected.createdBy}` : ""}
+              </span>
+              <StatusBadge status={selected.status} />
+            </div>
+            <div>
+              <p className="label mb-2">Status</p>
+              <div className="flex flex-wrap gap-2">
+                {STATUSES.map((s) => (
+                  <button key={s} onClick={() => updateStatus(s)} className={`badge border ${selected.status === s ? "bg-brand-600 text-white border-brand-600" : "bg-white dark:bg-ink-800 text-ink-600 dark:text-ink-200 border-ink-200 dark:border-ink-600"}`}>{s}</button>
+                ))}
+              </div>
+            </div>
             <div className="grid grid-cols-2 gap-3 text-sm">
               <div><p className="label">Contact</p><p className="text-ink-800 dark:text-white">{selected.contactPerson}</p></div>
               <div><p className="label">Designation</p><p className="text-ink-800 dark:text-white">{selected.designation || "—"}</p></div>
-              <div><p className="label">Email</p><p className="text-ink-800 dark:text-white">{selected.email}</p></div>
-              <div><p className="label">Phone</p><p className="text-ink-800 dark:text-white">{selected.phone}</p></div>
+              <div><p className="label">Email</p><p className="text-ink-800 dark:text-white">{selected.email || "—"}</p></div>
+              <div><p className="label">Phone</p><p className="text-ink-800 dark:text-white">{selected.phone || "—"}</p></div>
               <div><p className="label">GST</p><p className="text-ink-800 dark:text-white">{selected.gstNumber || "—"}</p></div>
               <div><p className="label">Account Manager</p><p className="text-ink-800 dark:text-white">{selected.accountManager}</p></div>
               <div className="col-span-2"><p className="label">Billing Address</p><p className="text-ink-800 dark:text-white">{selected.billingAddress}</p></div>
@@ -191,6 +237,16 @@ export default function Clients() {
                   </div>
                 </div>
               </>
+            )}
+            <hr className="border-ink-100 dark:border-ink-700" />
+            <CommentsPanel entityType="client" entityId={selected?.id} />
+            {canDelete && (
+              <button
+                onClick={() => handleDelete(selected.id)}
+                className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold py-2 px-4 rounded w-full mt-6 transition-colors"
+              >
+                Delete Client
+              </button>
             )}
           </div>
         )}

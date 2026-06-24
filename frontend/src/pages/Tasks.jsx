@@ -8,6 +8,12 @@ import Modal from "../components/Modal";
 import Drawer from "../components/Drawer";
 import FormField from "../components/FormField";
 import CSVImportModal from "../components/CSVImportModal";
+import { usePermissions } from "../context/PermissionsContext";
+
+function fmtDate(iso) {
+  if (!iso) return "—";
+  return new Date(iso).toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric" });
+}
 
 const STATUSES = ["Pending", "In Progress", "Completed", "Overdue"];
 const PRIORITIES = ["Low", "Medium", "High"];
@@ -22,7 +28,10 @@ export default function Tasks() {
   const [showImport, setShowImport] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
   const [selected, setSelected] = useState(null);
-  const [comment, setComment] = useState("");
+  const { can, canExportCSV } = usePermissions();
+  const canCreate = can("tasks", "create");
+  const canDelete = can("tasks", "delete");
+  const canExport = canExportCSV("tasks");
 
   function load() {
     api.get("/tasks").then((res) => setTasks(res.data?.data || [])).catch(() => setTasks([]));
@@ -43,6 +52,18 @@ export default function Tasks() {
     setShowCreate(false);
     setForm(EMPTY_FORM);
     load();
+  }
+
+  async function handleDelete(id) {
+    if (!window.confirm("Are you sure you want to delete this task?")) return;
+    try {
+      await api.delete(`/tasks/${id}`);
+      setSelected(null);
+      load();
+    } catch (err) {
+      console.error("Error deleting task:", err);
+      alert("Failed to delete task.");
+    }
   }
 
   async function updateStatus(task, status) {
@@ -81,9 +102,9 @@ export default function Tasks() {
         subtitle="Stay on top of follow-ups, approvals, and deliverable deadlines."
         actions={
           <>
-            <button className="btn-secondary" onClick={exportCSV}><Download size={15} /> Export CSV</button>
-            <button className="btn-secondary" onClick={() => setShowImport(true)}><Upload size={15} /> Import CSV</button>
-            <button className="btn-primary" onClick={() => setShowCreate(true)}><Plus size={16} /> New Task</button>
+            {canExport && <button className="btn-secondary" onClick={exportCSV}><Download size={15} /> Export CSV</button>}
+            {canCreate && <button className="btn-secondary" onClick={() => setShowImport(true)}><Upload size={15} /> Import CSV</button>}
+            {canCreate && <button className="btn-primary" onClick={() => setShowCreate(true)}><Plus size={16} /> New Task</button>}
           </>
         }
       />
@@ -112,6 +133,7 @@ export default function Tasks() {
                     <span className="text-xs text-ink-400">{t.dueDate}</span>
                   </div>
                   <p className="text-xs text-ink-400 mt-1">{t.assignedToName}</p>
+                  <p className="text-[10px] text-ink-300 dark:text-ink-500 mt-1">Added {fmtDate(t.createdAt)}</p>
                 </button>
               ))}
             </div>
@@ -139,6 +161,11 @@ export default function Tasks() {
       <Drawer open={!!selected} onClose={() => setSelected(null)} title={selected?.title} subtitle={selected?.assignedToName}>
         {selected && (
           <div className="space-y-5">
+            <div className="flex items-center gap-2">
+              <span className="text-[11px] bg-ink-100 dark:bg-ink-700 text-ink-500 dark:text-ink-300 rounded-full px-2.5 py-0.5 font-medium">
+                Added {fmtDate(selected.createdAt)}
+              </span>
+            </div>
             <p className="text-sm text-ink-700 dark:text-ink-100">{selected.description || "No description provided."}</p>
             <div>
               <p className="label mb-2">Status</p>
@@ -164,6 +191,14 @@ export default function Tasks() {
                 {(!selected.comments || selected.comments.length === 0) && <p className="text-sm text-ink-400">No comments yet.</p>}
               </div>
             </div>
+            {canDelete && (
+              <button
+                onClick={() => handleDelete(selected.id)}
+                className="bg-red-600 hover:bg-red-700 text-white text-sm font-semibold py-2 px-4 rounded w-full mt-6 transition-colors"
+              >
+                Delete Task
+              </button>
+            )}
           </div>
         )}
       </Drawer>

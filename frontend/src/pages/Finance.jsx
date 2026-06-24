@@ -6,6 +6,7 @@ import KpiCard from "../components/KpiCard";
 import StatusBadge from "../components/StatusBadge";
 import Modal from "../components/Modal";
 import FormField from "../components/FormField";
+import { usePermissions } from "../context/PermissionsContext";
 
 const TABS = ["Invoices", "Vendor Payments", "Expenses"];
 
@@ -23,6 +24,9 @@ export default function Finance() {
   const [vendors, setVendors] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({});
+  const { can } = usePermissions();
+  const canCreate = can("finance", "create");
+  const canEdit = can("finance", "edit");
 
   function loadAll() {
     api.get("/finance/summary").then((res) => setSummary(res.data.data));
@@ -69,7 +73,7 @@ export default function Finance() {
       <PageHeader
         title="Finance"
         subtitle="Invoices, vendor payments, budgets, and profitability."
-        actions={<button className="btn-primary" onClick={() => setShowCreate(true)}><Plus size={16} /> New {tab === "Vendor Payments" ? "Payment" : tab === "Expenses" ? "Expense" : "Invoice"}</button>}
+        actions={canCreate && <button className="btn-primary" onClick={() => setShowCreate(true)}><Plus size={16} /> New {tab === "Vendor Payments" ? "Payment" : tab === "Expenses" ? "Expense" : "Invoice"}</button>}
       />
 
       {summary && (
@@ -103,7 +107,7 @@ export default function Finance() {
                   <td className="px-4 py-3">{fmt(inv.amount)}</td>
                   <td className="px-4 py-3">{inv.dueDate}</td>
                   <td className="px-4 py-3"><StatusBadge status={inv.status} /></td>
-                  <td className="px-4 py-3">{inv.status !== "Paid" && <button className="btn-ghost !px-2 !py-1" onClick={() => markInvoicePaid(inv)}>Mark Paid</button>}</td>
+                  <td className="px-4 py-3">{inv.status !== "Paid" && canEdit && <button className="btn-ghost !px-2 !py-1" onClick={() => markInvoicePaid(inv)}>Mark Paid</button>}</td>
                 </tr>
               ))}
             </tbody>
@@ -125,7 +129,7 @@ export default function Finance() {
                   <td className="px-4 py-3">{fmt(p.amount)}</td>
                   <td className="px-4 py-3">{p.dueDate}</td>
                   <td className="px-4 py-3"><StatusBadge status={p.status} /></td>
-                  <td className="px-4 py-3">{p.status !== "Paid" && <button className="btn-ghost !px-2 !py-1" onClick={() => markPaymentPaid(p)}>Mark Paid</button>}</td>
+                  <td className="px-4 py-3">{p.status !== "Paid" && canEdit && <button className="btn-ghost !px-2 !py-1" onClick={() => markPaymentPaid(p)}>Mark Paid</button>}</td>
                 </tr>
               ))}
             </tbody>

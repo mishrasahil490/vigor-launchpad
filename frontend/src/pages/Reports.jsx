@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Download } from "lucide-react";
 import api from "../api/client";
 import PageHeader from "../components/PageHeader";
+import { usePermissions } from "../context/PermissionsContext";
 
 const REPORTS = [
   { key: "lead-conversion", label: "Lead Conversion Report" },
@@ -20,15 +21,23 @@ function fmtVal(v) {
   return v ?? "—";
 }
 
+function reorderColumns(cols) {
+  const LAST_KEYWORDS = ["phone", "email", "number", "contact", "mobile"];
+  const isLast = (h) => LAST_KEYWORDS.some((kw) => h.toLowerCase().includes(kw));
+  return [...cols.filter((c) => !isLast(c)), ...cols.filter((c) => isLast(c))];
+}
+
 export default function Reports() {
   const [activeReport, setActiveReport] = useState(REPORTS[0].key);
   const [rows, setRows] = useState([]);
+  const { canExportCSV } = usePermissions();
+  const canExport = canExportCSV("reports");
 
   useEffect(() => {
     api.get(`/reports/${activeReport}`).then((res) => setRows(res.data.data));
   }, [activeReport]);
 
-  const columns = rows.length ? Object.keys(rows[0]) : [];
+  const columns = rows.length ? reorderColumns(Object.keys(rows[0])) : [];
 
   function exportCSV() {
     window.open(`/api/reports/${activeReport}?format=csv`, "_blank");
@@ -55,7 +64,7 @@ export default function Reports() {
       <div className="card overflow-hidden">
         <div className="flex items-center justify-between px-4 py-3 border-b border-ink-100 dark:border-ink-700">
           <p className="font-semibold text-ink-800 dark:text-white">{REPORTS.find((r) => r.key === activeReport)?.label}</p>
-          <button className="btn-secondary" onClick={exportCSV}><Download size={15} /> Export CSV</button>
+          {canExport && <button className="btn-secondary" onClick={exportCSV}><Download size={15} /> Export CSV</button>}
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">

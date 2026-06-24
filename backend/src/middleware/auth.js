@@ -17,7 +17,18 @@ async function authenticate(req, res, next) {
       const jwt = require("jsonwebtoken");
       const JWT_SECRET = process.env.JWT_SECRET || "vigor-launchpad-dev-secret";
       const payload = jwt.verify(token, JWT_SECRET);
-      req.user = payload;
+      
+      const profile = db.findOne("users", (u) => u.id === payload.id);
+      if (!profile) return res.status(401).json({ error: "User profile not found." });
+
+      req.user = {
+        id: profile.id,
+        name: profile.name,
+        email: profile.email,
+        role: profile.role,
+        team: profile.team,
+        permissions: profile.permissions || db.defaultPermissions(profile.role)
+      };
       return next();
     } catch (err) {
       return res.status(401).json({ error: "Invalid or expired token." });
@@ -42,7 +53,8 @@ async function authenticate(req, res, next) {
       name: profile.name,
       email: profile.email,
       role: profile.role,
-      team: profile.team
+      team: profile.team,
+      permissions: profile.permissions || db.defaultPermissions(profile.role)
     };
     next();
   } catch (err) {
@@ -75,4 +87,17 @@ function scopeToUser(req, rows, ownerField = "ownerId") {
   return rows.filter((r) => r[ownerField] === id || r[ownerField] === name);
 }
 
-module.exports = { authenticate, authorize, scopeToUser, JWT_SECRET };
+function requirePermission(entity, action) {
+  return (req, res, next) => {
+    if (!req.user) return res.status(401).json({ error: "Not authenticated." });
+    if (req.user.role === "Super Admin") return next();
+
+    const perms = req.user.permissions;
+    if (!perms || !perms.actions?.[entity]?.[action]) {
+      return res.status(403).json({ error: `You do not have permission to ${action} ${entity}.` });
+    }
+    next();
+  };
+}
+
+module.exports = { authenticate, authorize, requirePermission, scopeToUser, JWT_SECRET };

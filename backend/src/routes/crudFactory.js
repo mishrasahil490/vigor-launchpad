@@ -54,7 +54,7 @@ function crudRouter(table, opts = {}) {
   });
 
   router.post("/", authorize(...writeRoles, ...(opts.allowEmployeeCreate ? ["Employee"] : [])), (req, res) => {
-    const row = db.insert(table, req.body);
+    const row = db.insert(table, req.body, req.user);
     res.status(201).json({ data: row });
   });
 
@@ -67,7 +67,7 @@ function crudRouter(table, opts = {}) {
     const errors = [];
     records.forEach((record, i) => {
       try {
-        const row = db.insert(table, record);
+        const row = db.insert(table, record, req.user);
         inserted.push(row);
       } catch (err) {
         errors.push({ row: i + 1, error: err.message });
@@ -84,7 +84,7 @@ function crudRouter(table, opts = {}) {
     const canWrite = writeRoles.includes(req.user.role) || (opts.allowEmployeeEdit && isOwner);
     if (!canWrite) return res.status(403).json({ error: "You do not have permission to edit this record." });
 
-    const row = db.update(table, req.params.id, req.body);
+    const row = db.update(table, req.params.id, req.body, req.user);
     res.json({ data: row });
   });
 

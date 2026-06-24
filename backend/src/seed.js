@@ -107,12 +107,15 @@ const leads = leadCompanyNames.map((company, i) => {
   const status = leadStatuses[i % leadStatuses.length];
   const created = new Date();
   created.setDate(created.getDate() - (i * 7 + 3));
+  const contactPerson = ["Aisha Khan", "Vikram Rao", "Tanya Sharma", "Devansh Gupta", "Meera Pillai"][i % 5];
+  const phone = `+91 98${(10000000 + i * 137).toString().slice(0, 8)}`;
+  
   return {
     leadName: `${company} - Q${(i % 4) + 1} Campaign`,
     companyName: company,
-    contactPerson: ["Aisha Khan", "Vikram Rao", "Tanya Sharma", "Devansh Gupta", "Meera Pillai"][i % 5],
+    contactPerson: contactPerson,
     email: `contact@${company.toLowerCase().replace(/[^a-z]/g, "")}.com`,
-    phoneNumber: `+91 98${(10000000 + i * 137).toString().slice(0, 8)}`,
+    phoneNumber: phone,
     leadSource: leadSources[i % leadSources.length],
     industry: industries[i % industries.length],
     estimatedBudget: 200000 + i * 45000,
@@ -122,6 +125,25 @@ const leads = leadCompanyNames.map((company, i) => {
     score: 40 + ((i * 13) % 60),
     createdAt: created.toISOString(),
     updatedAt: created.toISOString(),
+    
+    // New Fields
+    brandName: company,
+    pocName: contactPerson,
+    contactNumber: phone,
+    category: ["Brand Activation", "Influencer Marketing", "Event", "Digital Campaign", "PR", "Performance Marketing", "Other"][i % 7],
+    brandType: ["D2C", "FMCG", "Fashion", "Tech", "F&B", "Beauty", "Healthcare"][i % 7],
+    groupName: ["Reliance Retail", "Aditya Birla Group", "Tata Group", ""][i % 4],
+    designation: ["Marketing Head", "Brand Manager", "CMO", "Growth Lead", "PR Manager"][i % 5],
+    linkedInProfile: `https://linkedin.com/in/${contactPerson.toLowerCase().replace(" ", "-")}`,
+    createdBy: "System",
+    updatedBy: "System",
+    history: [
+      {
+        user: "System",
+        action: "Created",
+        timestamp: created.toISOString()
+      }
+    ]
   };
 });
 const leadRows = leads.map((l) => db.insert("leads", l));
@@ -223,40 +245,50 @@ clientRows.forEach((client, ci) => {
       otherCosts: Math.round(budget * 0.05),
     });
     campaignRows.push(campaign);
-
-    // assign 2-3 influencers per campaign
-    const assignedInfluencers = influencerRows.slice((idx * 3) % influencerRows.length, (idx * 3) % influencerRows.length + 3);
-    assignedInfluencers.forEach((inf, ai) => {
-      db.insert("campaignInfluencers", {
-        campaignId: campaign.id,
-        influencerId: inf.id,
-        agreedCost: inf.commercialCost,
-        deliverableType: ["Reel", "Story", "Post"][ai % 3],
-        approvalStatus: ["Approved", "Pending", "Approved"][ai % 3],
-        contentStatus: ["Posted", "In Progress", "Not Started"][ai % 3],
-      });
-    });
-
-    // deliverables / content calendar
-    db.insert("deliverables", { campaignId: campaign.id, title: "Teaser Reel", influencerId: assignedInfluencers[0]?.id, dueDate: start.toISOString().slice(0, 10), status: "Completed", approvalStatus: "Approved" });
-    db.insert("deliverables", { campaignId: campaign.id, title: "Launch Day Post", influencerId: assignedInfluencers[1]?.id, dueDate: end.toISOString().slice(0, 10), status: "Pending", approvalStatus: "Pending Review" });
   }
 });
 
 // ---------- VENDORS ----------
 const vendorCategories = ["Production", "Photography", "Videography", "Venue", "Hospitality", "Logistics", "Printing", "Digital Marketing", "Other"];
-const vendorRows = vendorCategories.map((cat, i) =>
-  db.insert("vendors", {
-    vendorName: `${cat} Partners ${i % 2 === 0 ? "Pvt Ltd" : "& Co"}`,
+const vendorRows = vendorCategories.map((cat, i) => {
+  const vName = `${cat} Partners ${i % 2 === 0 ? "Pvt Ltd" : "& Co"}`;
+  const vPhone = `+91 96${(10000000 + i * 311).toString().slice(0, 8)}`;
+  const vEmail = `ops@${cat.toLowerCase().replace(/[^a-z]/g, "")}partners.com`;
+  const vCity = cities[i % cities.length];
+  
+  return db.insert("vendors", {
+    vendorName: vName,
     serviceType: cat,
     contactPerson: ["Sanjay Kumar", "Ritu Agarwal", "Manoj Pillai", "Farah Sheikh"][i % 4],
-    phone: `+91 96${(10000000 + i * 311).toString().slice(0, 8)}`,
-    email: `ops@${cat.toLowerCase().replace(/[^a-z]/g, "")}partners.com`,
+    phone: vPhone,
+    email: vEmail,
     gstNumber: `19AAACV${1000 + i}1Z${i % 9}`,
-    address: cities[i % cities.length] + ", India",
+    address: vCity + ", India",
     paymentTerms: ["Net 15", "Net 30", "50% Advance"][i % 3],
-  })
-);
+    
+    // New Fields
+    name: vName,
+    contactNumber: vPhone,
+    region: ["North", "South", "East", "West", "Central", "Pan India"][i % 6],
+    companyName: vName,
+    websiteEmail: vEmail,
+    city: vCity,
+    schoolPermission: ["Yes", "No", "Partial"][i % 3],
+    collegePermission: ["Yes", "No", "Partial"][(i + 1) % 3],
+    manPower: 5 + (i * 4),
+    fabrication: ["Yes", "No", "Partial"][(i + 2) % 3],
+    comment: "Established track record of timely deliveries.",
+    createdBy: "System",
+    updatedBy: "System",
+    history: [
+      {
+        user: "System",
+        action: "Created",
+        timestamp: new Date().toISOString()
+      }
+    ]
+  });
+});
 
 // ---------- EVENTS ----------
 const eventTypes = ["Brand Activation", "Product Launch", "Influencer Meetup", "Award Night", "Pop-up Store"];

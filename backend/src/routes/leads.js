@@ -51,9 +51,9 @@ router.post("/:id/convert", authenticate, authorize("Super Admin", "Manager"), (
     accountManager: req.body.accountManager || lead.ownerName || "",
     status: "Active",
     convertedFromLeadId: lead.id,
-  });
+  }, req.user);
 
-  db.update("leads", lead.id, { status: "Won", convertedClientId: client.id });
+  db.update("leads", lead.id, { status: "Won", convertedClientId: client.id }, req.user);
 
   res.status(201).json({ data: client });
 });

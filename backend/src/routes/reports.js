@@ -14,8 +14,28 @@ function toCSV(rows) {
   return lines.join("\n");
 }
 
+function canUserExportCSV(user, entity = "reports") {
+  if (!user) return false;
+  if (user.role === "Super Admin") return true;
+  const perms = user.permissions || {};
+  
+  const entityPerm = perms.actions?.[entity];
+  if (!entityPerm || !entityPerm.exportCSV) return false;
+
+  // Check if entity-specific CSV access has expired
+  const expiresAt = entityPerm.exportCSVExpiresAt;
+  if (expiresAt && new Date(expiresAt) <= new Date()) {
+    return false;
+  }
+
+  return true;
+}
+
 function respond(req, res, rows) {
   if (req.query.format === "csv") {
+    if (!canUserExportCSV(req.user)) {
+      return res.status(403).json({ error: "Only Super Admins or users with active CSV export access can export data." });
+    }
     res.setHeader("Content-Type", "text/csv");
     res.setHeader("Content-Disposition", `attachment; filename="report.csv"`);
     return res.send(toCSV(rows));
@@ -58,7 +78,7 @@ router.get("/employee-performance", (req, res) => {
 router.get("/campaign-performance", (req, res) => {
   const campaigns = db.all("campaigns");
   const invoices = db.all("invoices");
-  const assignments = db.all("campaignInfluencers");
+  const assignments = [];
   const rows = campaigns.map((c) => {
     const cost = assignments.filter((a) => a.campaignId === c.id).reduce((s, a) => s + Number(a.agreedCost || 0), 0);
     const revenue = invoices.filter((i) => i.campaignId === c.id).reduce((s, i) => s + Number(i.amount || 0), 0);
@@ -77,7 +97,7 @@ router.get("/campaign-performance", (req, res) => {
 
 router.get("/influencer-performance", (req, res) => {
   const influencers = db.all("influencers");
-  const assignments = db.all("campaignInfluencers");
+  const assignments = [];
   const rows = influencers.map((inf) => {
     const linked = assignments.filter((a) => a.influencerId === inf.id);
     return {

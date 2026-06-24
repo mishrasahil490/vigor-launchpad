@@ -44,7 +44,7 @@ router.post("/", (req, res) => {
     linkedType: req.body.linkedType || null,
     linkedId: req.body.linkedId || null,
     createdBy: req.user.name,
-  });
+  }, req.user);
   res.status(201).json({ data: row });
 });
 
@@ -68,7 +68,7 @@ router.post("/bulk", (req, res) => {
         linkedType: record.linkedType || null,
         linkedId: record.linkedId || null,
         createdBy: req.user.name,
-      });
+      }, req.user);
       inserted.push(row);
     } catch (err) {
       errors.push({ row: i + 1, error: err.message });
@@ -78,7 +78,7 @@ router.post("/bulk", (req, res) => {
 });
 
 router.put("/:id", (req, res) => {
-  const row = db.update("tasks", req.params.id, req.body);
+  const row = db.update("tasks", req.params.id, req.body, req.user);
   if (!row) return res.status(404).json({ error: "Task not found." });
   res.json({ data: row });
 });

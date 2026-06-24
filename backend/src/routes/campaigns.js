@@ -19,14 +19,11 @@ router.get("/:id", (req, res) => {
   const campaign = db.getById("campaigns", req.params.id);
   if (!campaign) return res.status(404).json({ error: "Campaign not found." });
 
-  const deliverables = db.find("deliverables", (d) => d.campaignId === campaign.id);
-  const assignments = db.find("campaignInfluencers", (a) => a.campaignId === campaign.id);
-
-  res.json({ data: { ...campaign, deliverables, assignments } });
+  res.json({ data: campaign });
 });
 
 router.post("/", authorize("Super Admin", "Manager"), (req, res) => {
-  const row = db.insert("campaigns", { spend: 0, ...req.body });
+  const row = db.insert("campaigns", { spend: 0, ...req.body }, req.user);
   res.status(201).json({ data: row });
 });
 
@@ -39,7 +36,7 @@ router.post("/bulk", authorize("Super Admin", "Manager"), (req, res) => {
   const errors = [];
   records.forEach((record, i) => {
     try {
-      const row = db.insert("campaigns", { spend: 0, ...record });
+      const row = db.insert("campaigns", { spend: 0, ...record }, req.user);
       inserted.push(row);
     } catch (err) {
       errors.push({ row: i + 1, error: err.message });
@@ -49,7 +46,7 @@ router.post("/bulk", authorize("Super Admin", "Manager"), (req, res) => {
 });
 
 router.put("/:id", authorize("Super Admin", "Manager"), (req, res) => {
-  const row = db.update("campaigns", req.params.id, req.body);
+  const row = db.update("campaigns", req.params.id, req.body, req.user);
   if (!row) return res.status(404).json({ error: "Campaign not found." });
   res.json({ data: row });
 });
@@ -60,57 +57,11 @@ router.delete("/:id", authorize("Super Admin", "Manager"), (req, res) => {
   res.status(204).end();
 });
 
-// Assign / remove influencers on a campaign
-router.post("/:id/influencers", authorize("Super Admin", "Manager"), (req, res) => {
-  const campaign = db.getById("campaigns", req.params.id);
-  if (!campaign) return res.status(404).json({ error: "Campaign not found." });
-  const row = db.insert("campaignInfluencers", {
-    campaignId: campaign.id,
-    influencerId: req.body.influencerId,
-    agreedCost: req.body.agreedCost || 0,
-    deliverableType: req.body.deliverableType || "Reel",
-    approvalStatus: "Pending",
-    contentStatus: "Not Started",
-  });
-  res.status(201).json({ data: row });
-});
-
-router.put("/:id/influencers/:assignmentId", authorize("Super Admin", "Manager"), (req, res) => {
-  const row = db.update("campaignInfluencers", req.params.assignmentId, req.body);
-  if (!row) return res.status(404).json({ error: "Assignment not found." });
-  res.json({ data: row });
-});
-
-router.delete("/:id/influencers/:assignmentId", authorize("Super Admin", "Manager"), (req, res) => {
-  db.remove("campaignInfluencers", req.params.assignmentId);
-  res.status(204).end();
-});
-
-// Deliverables / content calendar
-router.post("/:id/deliverables", (req, res) => {
-  const row = db.insert("deliverables", {
-    campaignId: Number(req.params.id),
-    title: req.body.title,
-    influencerId: req.body.influencerId || null,
-    dueDate: req.body.dueDate,
-    status: req.body.status || "Pending",
-    approvalStatus: req.body.approvalStatus || "Pending Review",
-  });
-  res.status(201).json({ data: row });
-});
-
-router.put("/:id/deliverables/:deliverableId", (req, res) => {
-  const row = db.update("deliverables", req.params.deliverableId, req.body);
-  if (!row) return res.status(404).json({ error: "Deliverable not found." });
-  res.json({ data: row });
-});
-
 // Profitability: budget vs spend vs invoiced revenue
 router.get("/:id/profitability", (req, res) => {
   const campaign = db.getById("campaigns", req.params.id);
   if (!campaign) return res.status(404).json({ error: "Campaign not found." });
-  const assignments = db.find("campaignInfluencers", (a) => a.campaignId === campaign.id);
-  const influencerCost = assignments.reduce((sum, a) => sum + (Number(a.agreedCost) || 0), 0);
+  const influencerCost = 0;
   const invoices = db.find("invoices", (i) => i.campaignId === campaign.id);
   const revenue = invoices.reduce((sum, i) => sum + (Number(i.amount) || 0), 0);
   const profit = revenue - influencerCost - (Number(campaign.otherCosts) || 0);

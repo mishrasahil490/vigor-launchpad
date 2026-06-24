@@ -12,26 +12,30 @@ import {
   BarChart3,
   Settings,
   Sparkles,
+  GraduationCap,
 } from "lucide-react";
 import { useAuth } from "../context/AuthContext";
+import { usePermissions } from "../context/PermissionsContext";
 
 const NAV = [
-  { to: "/", label: "Dashboard", icon: LayoutDashboard, roles: ["Super Admin", "Manager", "Employee", "Finance"] },
-  { to: "/leads", label: "Leads", icon: Target, roles: ["Super Admin", "Manager", "Employee"] },
-  { to: "/clients", label: "Clients", icon: Building2, roles: ["Super Admin", "Manager", "Employee", "Finance"] },
-  { to: "/influencers", label: "Influencers", icon: Sparkles, roles: ["Super Admin", "Manager", "Employee"] },
-  { to: "/campaigns", label: "Campaigns", icon: Megaphone, roles: ["Super Admin", "Manager", "Employee"] },
-  { to: "/events", label: "Events", icon: CalendarDays, roles: ["Super Admin", "Manager", "Employee"] },
-  { to: "/vendors", label: "Vendors", icon: Truck, roles: ["Super Admin", "Manager", "Finance"] },
-  { to: "/tasks", label: "Tasks", icon: CheckSquare, roles: ["Super Admin", "Manager", "Employee"] },
-  { to: "/finance", label: "Finance", icon: Wallet, roles: ["Super Admin", "Finance", "Manager"] },
-  { to: "/reports", label: "Reports", icon: BarChart3, roles: ["Super Admin", "Manager", "Finance"] },
-  { to: "/settings", label: "Settings", icon: Settings, roles: ["Super Admin"] },
+  { to: "/", label: "Dashboard", icon: LayoutDashboard, page: "dashboard" },
+  { to: "/leads", label: "Leads", icon: Target, page: "leads" },
+  { to: "/clients", label: "Clients", icon: Building2, page: "clients" },
+  { to: "/influencers", label: "Influencers", icon: Sparkles, page: "influencers" },
+  { to: "/campaigns", label: "Campaigns", icon: Megaphone, page: "campaigns" },
+  { to: "/events", label: "Events", icon: CalendarDays, page: "events" },
+  { to: "/vendors", label: "Vendors", icon: Truck, page: "vendors" },
+  { to: "/tasks", label: "Tasks", icon: CheckSquare, page: "tasks" },
+  { to: "/finance", label: "Finance", icon: Wallet, page: "finance" },
+  { to: "/reports", label: "Reports", icon: BarChart3, page: "reports" },
+  { to: "/vigor-space", label: "Vigor Space", icon: GraduationCap, page: "vigor-space" },
+  { to: "/settings", label: "Settings", icon: Settings, page: "settings" },
 ];
 
 export default function Sidebar({ open, onClose }) {
   const { user } = useAuth();
-  const items = NAV.filter((item) => !user || item.roles.includes(user.role));
+  const { canAccessPage } = usePermissions();
+  const items = NAV.filter((item) => !user || canAccessPage(item.page));
 
   return (
     <>
@@ -41,13 +45,9 @@ export default function Sidebar({ open, onClose }) {
           open ? "translate-x-0" : "-translate-x-full lg:translate-x-0"
         }`}
       >
-        <div className="flex items-center gap-2.5 px-5 h-16 border-b border-white/10">
-          <div className="h-8 w-8 rounded-lg bg-gradient-to-br from-brand-400 to-brand-600 flex items-center justify-center font-display font-bold text-sm">
-            VL
-          </div>
-          <div className="leading-tight">
-            <p className="font-display font-bold text-sm">Vigor Launchpad</p>
-            <p className="text-[11px] text-white/50">Operations Platform</p>
+        <div className="flex items-center justify-center px-4 h-16 border-b border-white/10">
+          <div className="bg-white rounded-lg px-3 py-1.5 flex items-center justify-center w-full">
+            <img src="/logo.png" alt="Vigor Launchpad" className="h-9 object-contain" />
           </div>
         </div>
 

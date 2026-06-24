@@ -26,7 +26,7 @@ router.get("/:id", (req, res) => {
 });
 
 router.post("/", authorize("Super Admin", "Manager"), (req, res) => {
-  const row = db.insert("events", { spend: 0, ...req.body });
+  const row = db.insert("events", { spend: 0, ...req.body }, req.user);
   res.status(201).json({ data: row });
 });
 
@@ -39,7 +39,7 @@ router.post("/bulk", authorize("Super Admin", "Manager"), (req, res) => {
   const errors = [];
   records.forEach((record, i) => {
     try {
-      const row = db.insert("events", { spend: 0, ...record });
+      const row = db.insert("events", { spend: 0, ...record }, req.user);
       inserted.push(row);
     } catch (err) {
       errors.push({ row: i + 1, error: err.message });
@@ -49,7 +49,7 @@ router.post("/bulk", authorize("Super Admin", "Manager"), (req, res) => {
 });
 
 router.put("/:id", authorize("Super Admin", "Manager"), (req, res) => {
-  const row = db.update("events", req.params.id, req.body);
+  const row = db.update("events", req.params.id, req.body, req.user);
   if (!row) return res.status(404).json({ error: "Event not found." });
   res.json({ data: row });
 });
