@@ -23,10 +23,21 @@ function fmtCurrency(n) {
 export default function Dashboard() {
   const [kpis, setKpis] = useState(null);
   const [charts, setCharts] = useState(null);
+  const [error, setError] = useState(null);
 
-  function load() {
-    api.get("/dashboard/kpis").then((res) => setKpis(res.data.data));
-    api.get("/dashboard/charts").then((res) => setCharts(res.data.data));
+  async function load() {
+    setError(null);
+    try {
+      const [kpiRes, chartRes] = await Promise.all([
+        api.get("/dashboard/kpis"),
+        api.get("/dashboard/charts"),
+      ]);
+      setKpis(kpiRes.data.data);
+      setCharts(chartRes.data.data);
+    } catch (err) {
+      console.error("Dashboard load error:", err);
+      setError("Failed to load dashboard data. The server may be starting up — please retry in a moment.");
+    }
   }
 
   useEffect(() => {
@@ -34,6 +45,15 @@ export default function Dashboard() {
     window.addEventListener("db-change", load);
     return () => window.removeEventListener("db-change", load);
   }, []);
+
+  if (error) {
+    return (
+      <div className="flex flex-col items-center justify-center min-h-[400px] gap-4">
+        <p className="text-rose-500 text-sm font-medium">{error}</p>
+        <button className="btn-primary" onClick={load}>Retry</button>
+      </div>
+    );
+  }
 
   if (!kpis || !charts) {
     return <div className="text-ink-400 p-10 text-center">Loading dashboard...</div>;

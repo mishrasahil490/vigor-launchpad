@@ -9,8 +9,16 @@ const router = express.Router();
 
 function toSafeUser(u) {
   const { passwordHash, ...rest } = u;
-  // Ensure permissions are always present, using role defaults if not stored
-  if (!rest.permissions || typeof rest.permissions !== 'object') {
+  // Ensure permissions are always present and non-empty, using role defaults if not stored.
+  // An empty object `{}` (the Supabase column default) must also be treated as "not set",
+  // otherwise all non-Super-Admin users lose page access after a session refresh.
+  const hasValidPermissions = (
+    rest.permissions &&
+    typeof rest.permissions === 'object' &&
+    Array.isArray(rest.permissions.pages) &&
+    rest.permissions.pages.length > 0
+  );
+  if (!hasValidPermissions) {
     rest.permissions = defaultPermissions(rest.role);
   }
   return rest;

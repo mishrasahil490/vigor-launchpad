@@ -29,7 +29,8 @@ router.put("/invoices/:id", (req, res) => {
 });
 
 router.delete("/invoices/:id", (req, res) => {
-  db.remove("invoices", req.params.id);
+  const ok = db.remove("invoices", req.params.id);
+  if (!ok) return res.status(404).json({ error: "Invoice not found." });
   res.status(204).end();
 });
 

@@ -31,7 +31,7 @@ const ENTITIES = [
 const ZONES = ["North Zone", "South Zone", "East Zone", "West Zone", "Central Zone"];
 
 export default function Settings() {
-  const { user: currentUser } = useAuth();
+  const { user: currentUser, login } = useAuth();
   const [users, setUsers] = useState([]);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState(EMPTY_FORM);
@@ -129,6 +129,19 @@ export default function Settings() {
     setSavingPerms(true);
     try {
       await api.put(`/auth/users/${selectedUserForPerms.id}/permissions`, permsForm);
+      // BUG 9 FIX: If we just updated permissions for the currently logged-in user,
+      // refresh their session so new permissions take effect without requiring a logout.
+      if (selectedUserForPerms.id === currentUser?.id) {
+        try {
+          const meRes = await api.get("/auth/me");
+          const refreshedUser = meRes.data.data;
+          localStorage.setItem("vigor_user", JSON.stringify(refreshedUser));
+          // Trigger a page reload so PermissionsContext re-evaluates from the updated localStorage
+          window.location.reload();
+        } catch (refreshErr) {
+          console.warn("Could not refresh session after permission update:", refreshErr);
+        }
+      }
       setSelectedUserForPerms(null);
       setPermsForm(null);
       load();
@@ -194,7 +207,12 @@ export default function Settings() {
       <PageHeader
         title="Settings — User Management"
         subtitle="Manage team members, roles, and access across Vigor Launchpad."
-        actions={<button className="btn-primary" onClick={() => setShowCreate(true)}><Plus size={16} /> Add User</button>}
+        actions={
+          // BUG 13 FIX: Only Super Admin can create users — hide button for other roles
+          currentUser?.role === "Super Admin" && (
+            <button className="btn-primary" onClick={() => setShowCreate(true)}><Plus size={16} /> Add User</button>
+          )
+        }
       />
 
       {/* ── My Account: Change Password ── */}

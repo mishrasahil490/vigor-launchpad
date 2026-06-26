@@ -16,10 +16,14 @@ export default function AppLayout() {
   useEffect(() => {
     // ── Strategy 1: Supabase Realtime (Vercel / production) ──────────────────
     if (SUPABASE_URL && SUPABASE_ANON_KEY) {
+      let supabase = null;
       let channel = null;
 
+      // BUG 7 FIX: Hoist the supabase client so cleanup can call removeChannel
+      // on the SAME instance that created the channel. Previously, cleanup created
+      // a new client which meant removeChannel was a no-op, causing WebSocket leaks.
       import("@supabase/supabase-js").then(({ createClient }) => {
-        const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+        supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
         channel = supabase
           .channel("vigor-realtime")
           .on(
@@ -38,10 +42,10 @@ export default function AppLayout() {
       });
 
       return () => {
-        if (channel) {
-          import("@supabase/supabase-js").then(({ createClient }) => {
-            const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-            supabase.removeChannel(channel);
+        // Use the same `supabase` instance created above — not a new one
+        if (supabase && channel) {
+          supabase.removeChannel(channel).catch((err) => {
+            console.warn("Failed to remove Supabase realtime channel:", err);
           });
         }
       };
@@ -51,24 +55,42 @@ export default function AppLayout() {
     const token = localStorage.getItem("vigor_token");
     if (!token) return;
 
-    const eventSource = new EventSource(`/api/realtime?token=${token}`);
+    let eventSource = null;
+    let reconnectTimer = null;
+    let closed = false;
 
-    eventSource.onmessage = (event) => {
-      try {
-        const change = JSON.parse(event.data);
-        console.log("Realtime change received:", change);
-        window.dispatchEvent(new CustomEvent("db-change", { detail: change }));
-      } catch (err) {
-        console.error("Failed to parse realtime data:", err);
-      }
-    };
+    function connect() {
+      if (closed) return;
+      eventSource = new EventSource(`/api/realtime?token=${token}`);
 
-    eventSource.onerror = (err) => {
-      console.warn("Realtime EventSource error, will retry...", err);
-    };
+      eventSource.onmessage = (event) => {
+        try {
+          const change = JSON.parse(event.data);
+          console.log("Realtime change received:", change);
+          window.dispatchEvent(new CustomEvent("db-change", { detail: change }));
+        } catch (err) {
+          console.error("Failed to parse realtime data:", err);
+        }
+      };
+
+      eventSource.onerror = () => {
+        // SSE connection dropped — close current source and reconnect after 5 seconds
+        if (eventSource) {
+          eventSource.close();
+          eventSource = null;
+        }
+        if (!closed) {
+          reconnectTimer = setTimeout(connect, 5000);
+        }
+      };
+    }
+
+    connect();
 
     return () => {
-      eventSource.close();
+      closed = true;
+      if (reconnectTimer) clearTimeout(reconnectTimer);
+      if (eventSource) eventSource.close();
     };
   }, []);
 

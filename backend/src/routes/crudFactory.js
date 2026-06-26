@@ -31,7 +31,7 @@ function crudRouter(table, opts = {}) {
     Object.entries(filters).forEach(([key, value]) => {
       if (value === undefined || value === "") return;
       rows = rows.filter((r) => {
-        if (r[key] === undefined) return true;
+        if (r[key] === undefined || r[key] === null) return false; // BUG 3 FIX: was `return true` — unknown field should exclude, not pass
         if (typeof r[key] === "number") return Number(r[key]) === Number(value);
         return String(r[key]).toLowerCase().includes(String(value).toLowerCase());
       });

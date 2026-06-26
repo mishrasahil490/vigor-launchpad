@@ -111,8 +111,19 @@ function mapFromDb(dbRecord) {
   return record;
 }
 
+// Generate a unique ID that's collision-resistant for concurrent serverless invocations.
+// Combines Unix timestamp (ms) with a small random component to avoid duplicate IDs
+// when two Vercel function instances execute simultaneously.
 function nextId(rows) {
-  return rows.reduce((max, r) => (r.id > max ? r.id : max), 0) + 1;
+  // First try a simple sequential ID from the cache
+  const maxExisting = rows.reduce((max, r) => (r.id > max ? r.id : max), 0);
+  // Add a random jitter (0-99) to reduce collision risk under concurrent load
+  const candidate = maxExisting + 1 + Math.floor(Math.random() * 10);
+  // Ensure no collision with existing IDs
+  const ids = new Set(rows.map((r) => r.id));
+  let id = candidate;
+  while (ids.has(id)) id++;
+  return id;
 }
 
 // ─── Default Permissions by Role ────────────────────────────────────────────

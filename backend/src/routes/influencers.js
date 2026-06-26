@@ -27,15 +27,15 @@ router.get("/", (req, res) => {
 
   const { q, category, tier, city, language, gender, minFollowers, maxFollowers, minEngagement, maxBudget, ownerId } = req.query;
 
-  if (category) rows = rows.filter((r) => r.category.toLowerCase() === category.toLowerCase());
-  if (tier) rows = rows.filter((r) => r.tier.toLowerCase() === tier.toLowerCase());
-  if (city) rows = rows.filter((r) => r.location.toLowerCase().includes(city.toLowerCase()));
-  if (language) rows = rows.filter((r) => r.language.toLowerCase().includes(language.toLowerCase()));
-  if (gender) rows = rows.filter((r) => r.gender.toLowerCase() === gender.toLowerCase());
-  if (minFollowers) rows = rows.filter((r) => r.followers >= Number(minFollowers));
-  if (maxFollowers) rows = rows.filter((r) => r.followers <= Number(maxFollowers));
-  if (minEngagement) rows = rows.filter((r) => r.engagementRate >= Number(minEngagement));
-  if (maxBudget) rows = rows.filter((r) => r.commercialCost <= Number(maxBudget));
+  if (category) rows = rows.filter((r) => (r.category || "").toLowerCase() === category.toLowerCase());
+  if (tier) rows = rows.filter((r) => (r.tier || "").toLowerCase() === tier.toLowerCase());
+  if (city) rows = rows.filter((r) => (r.location || "").toLowerCase().includes(city.toLowerCase()));
+  if (language) rows = rows.filter((r) => (r.language || "").toLowerCase().includes(language.toLowerCase()));
+  if (gender) rows = rows.filter((r) => (r.gender || "").toLowerCase() === gender.toLowerCase());
+  if (minFollowers) rows = rows.filter((r) => Number(r.followers || 0) >= Number(minFollowers));
+  if (maxFollowers) rows = rows.filter((r) => Number(r.followers || 0) <= Number(maxFollowers));
+  if (minEngagement) rows = rows.filter((r) => Number(r.engagementRate || 0) >= Number(minEngagement));
+  if (maxBudget) rows = rows.filter((r) => Number(r.commercialCost || 0) <= Number(maxBudget));
   if (ownerId) {
     if (ownerId === "unassigned") {
       rows = rows.filter((r) => !r.ownerId);
@@ -47,7 +47,7 @@ router.get("/", (req, res) => {
     const needle = q.toLowerCase();
     rows = rows.filter(
       (r) =>
-        r.creatorName.toLowerCase().includes(needle) ||
+        (r.creatorName || "").toLowerCase().includes(needle) ||
         (r.instagramHandle || "").toLowerCase().includes(needle) ||
         (r.category || "").toLowerCase().includes(needle)
     );

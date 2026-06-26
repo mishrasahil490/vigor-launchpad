@@ -78,18 +78,21 @@ router.get("/employee-performance", (req, res) => {
 router.get("/campaign-performance", (req, res) => {
   const campaigns = db.all("campaigns");
   const invoices = db.all("invoices");
-  const assignments = [];
+  // Use campaignShortlist for influencer cost tracking (assignments table was removed)
+  const shortlistEntries = db.all("campaignShortlist");
   const rows = campaigns.map((c) => {
-    const cost = assignments.filter((a) => a.campaignId === c.id).reduce((s, a) => s + Number(a.agreedCost || 0), 0);
+    const shortlisted = shortlistEntries.filter((s) => s.campaignId === c.id);
+    const influencerCost = shortlisted.reduce((sum, s) => sum + Number(s.agreedCost || 0), 0);
     const revenue = invoices.filter((i) => i.campaignId === c.id).reduce((s, i) => s + Number(i.amount || 0), 0);
     return {
       campaign: c.campaignName,
       status: c.status,
       budget: c.budget,
       spend: c.spend || 0,
-      influencerCost: cost,
+      influencersShortlisted: shortlisted.length,
+      influencerCost,
       revenue,
-      profit: revenue - cost - (c.otherCosts || 0),
+      profit: revenue - influencerCost - (c.otherCosts || 0),
     };
   });
   respond(req, res, rows);
@@ -97,17 +100,18 @@ router.get("/campaign-performance", (req, res) => {
 
 router.get("/influencer-performance", (req, res) => {
   const influencers = db.all("influencers");
-  const assignments = [];
+  // Use campaignShortlist to link influencers to campaigns (assignments table was removed)
+  const shortlistEntries = db.all("campaignShortlist");
   const rows = influencers.map((inf) => {
-    const linked = assignments.filter((a) => a.influencerId === inf.id);
+    const linked = shortlistEntries.filter((s) => s.influencerId === inf.id);
     return {
       creator: inf.creatorName,
       category: inf.category,
       tier: inf.tier,
       followers: inf.followers,
       engagementRate: inf.engagementRate,
-      campaignsBooked: linked.length,
-      totalEarnings: linked.reduce((s, a) => s + Number(a.agreedCost || 0), 0),
+      campaignsShortlisted: linked.length,
+      totalAgreedCost: linked.reduce((s, a) => s + Number(a.agreedCost || 0), 0),
     };
   });
   respond(req, res, rows);

@@ -165,21 +165,35 @@ const MODULE_CONFIGS = {
     fields: [
       { key: "leadName",       label: "Lead Name",       required: true  },
       { key: "brandName",      label: "Brand Name",      required: false },
+      { key: "pocName",        label: "POC Name",        required: false },
+      { key: "designation",    label: "Designation",     required: false },
+      { key: "category",       label: "Category",        required: false },
+      { key: "brandType",      label: "Brand Type",      required: false },
+      { key: "groupName",      label: "Group Name",      required: false },
       { key: "email",          label: "Email",           required: false },
-      { key: "phone",          label: "Phone Number",    required: false },
-      { key: "source",         label: "Lead Source",     required: false },
+      { key: "contactNumber",  label: "Contact Number",  required: false }, // BUG 5 FIX: was `phone`
+      { key: "linkedInProfile",label: "LinkedIn Profile",required: false },
+      { key: "leadSource",     label: "Lead Source",     required: false }, // BUG 5 FIX: was `source`
+      { key: "industry",       label: "Industry",        required: false },
+      { key: "estimatedBudget",label: "Est. Budget (₹)", required: false }, // BUG 5 FIX: was `estimatedValue`
       { key: "status",         label: "Status",          required: false },
-      { key: "estimatedValue", label: "Est. Value (₹)",  required: false },
     ],
-    numericFields: new Set(["estimatedValue"]),
+    numericFields: new Set(["estimatedBudget"]),
     aliases: {
-      leadName:       ["lead name", "lead", "name", "contact name", "lead_name"],
-      brandName:      ["brand name", "brand", "company", "brand_name"],
-      email:          ["email", "email id", "mail"],
-      phone:          ["phone", "mobile", "number"],
-      source:         ["source", "lead source"],
-      status:         ["status"],
-      estimatedValue: ["estimated value", "value", "deal size", "budget", "estimated_value"],
+      leadName:        ["lead name", "lead", "name", "contact name", "lead_name"],
+      brandName:       ["brand name", "brand", "company", "brand_name", "company name"],
+      pocName:         ["poc name", "poc", "point of contact", "contact person", "poc_name"],
+      designation:     ["designation", "role", "title", "job title"],
+      category:        ["category", "service category", "type"],
+      brandType:       ["brand type", "brand_type", "industry type"],
+      groupName:       ["group name", "group", "group_name", "parent company"],
+      email:           ["email", "email id", "mail", "e-mail"],
+      contactNumber:   ["contact number", "phone", "mobile", "number", "contact", "phone number", "contact_number"],
+      linkedInProfile: ["linkedin", "linkedin profile", "linkedin url", "linkedin_profile"],
+      leadSource:      ["lead source", "source", "lead_source", "channel"],
+      industry:        ["industry", "sector"],
+      estimatedBudget: ["estimated budget", "budget", "deal size", "value", "estimated value", "estimated_budget"],
+      status:          ["status"],
     }
   },
   tasks: {
@@ -307,7 +321,11 @@ export default function CSVImportModal({ onClose, onSuccess, moduleType = "influ
       }).filter(r => r[config.requiredField]); // skip rows with no required field
 
       const res = await api.post(config.apiPath, records);
-      setResult({ inserted: res.data.inserted, errors: res.data.errors || [] });
+      setResult({
+        inserted: res.data.inserted,
+        duplicates: res.data.duplicates || 0,
+        errors: res.data.errors || [],
+      });
       setStep(STEPS.RESULT);
       onSuccess();
     } catch (err) {
@@ -432,10 +450,15 @@ export default function CSVImportModal({ onClose, onSuccess, moduleType = "influ
             <div className="text-center py-8">
               <CheckCircle size={56} className="mx-auto mb-4 text-green-500"/>
               <h3 className="text-2xl font-bold text-ink-900 dark:text-white mb-2">Import Complete!</h3>
-              <p className="text-ink-500 mb-6">{result.inserted} records added to your database successfully.</p>
+              <p className="text-ink-500 mb-4">{result.inserted} records added to your database successfully.</p>
+              {result.duplicates > 0 && (
+                <p className="text-amber-600 dark:text-amber-400 text-sm mb-4">
+                  ⚠ {result.duplicates} duplicate records were skipped (already exist in the database).
+                </p>
+              )}
               {result.errors.length > 0 && (
                 <div className="text-left bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-700 rounded-lg p-4 mb-4">
-                  <p className="text-sm font-semibold text-amber-700 dark:text-amber-400 mb-2">{result.errors.length} rows were skipped:</p>
+                  <p className="text-sm font-semibold text-amber-700 dark:text-amber-400 mb-2">{result.errors.length} rows had errors:</p>
                   {result.errors.slice(0, 5).map((e, i) => (
                     <p key={i} className="text-xs text-amber-600 dark:text-amber-300">Row {e.row}: {e.error}</p>
                   ))}
